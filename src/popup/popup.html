@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Refboard</title>
+  <link rel="stylesheet" href="../lib/theme.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="logo"></span>Refboard</div>
+    <button class="btn" id="open-board">Open board</button>
+  </header>
+
+  <section class="page">
+    <img id="favicon" alt="">
+    <div>
+      <div id="page-title">…</div>
+      <div id="page-host"></div>
+    </div>
+  </section>
+
+  <button class="btn primary big" id="pick">
+    Pick a section of this page
+    <kbd>Alt+Shift+S</kbd>
+  </button>
+
+  <div class="divider"><span>or save the whole page</span></div>
+
+  <form id="page-form">
+    <label class="field"><span>What do you want to use from this?</span>
+      <textarea class="input" id="note" placeholder="e.g. Overall layout rhythm, big serif headings, muted beige palette"></textarea>
+    </label>
+    <div class="field"><span>Focus</span><div class="chips" id="categories"></div></div>
+    <label class="field"><span>Tags</span>
+      <input class="input" id="tags" placeholder="comma separated">
+    </label>
+    <label class="field"><span>Board</span>
+      <select class="input" id="board"></select>
+    </label>
+    <input class="input" id="new-board" placeholder="New board name" hidden>
+    <button class="btn" id="save-page" type="submit">Save whole page</button>
+  </form>
+
+  <p id="status" hidden></p>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

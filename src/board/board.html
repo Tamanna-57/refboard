@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Refboard</title>
+  <link rel="stylesheet" href="../lib/theme.css">
+  <link rel="stylesheet" href="board.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="logo"></span>Refboard</div>
+
+    <nav>
+      <h3>Boards</h3>
+      <ul id="boards"></ul>
+      <button class="link" id="new-board">+ New board</button>
+    </nav>
+
+    <section>
+      <h3>Focus</h3>
+      <div class="chips" id="category-filter"></div>
+    </section>
+
+    <section>
+      <h3>Tags</h3>
+      <div class="tags" id="tag-filter"></div>
+    </section>
+
+    <footer>
+      <button class="link" id="export">Export backup</button>
+      <button class="link" id="import">Import backup</button>
+      <input type="file" id="import-file" accept="application/json,.json" hidden>
+    </footer>
+  </aside>
+
+  <main>
+    <header class="toolbar">
+      <div class="title-row">
+        <h1 id="board-title">All references</h1>
+        <div class="board-actions" id="board-actions" hidden>
+          <button class="btn" id="rename-board">Rename</button>
+          <button class="btn danger" id="delete-board">Delete board</button>
+        </div>
+      </div>
+      <div class="controls">
+        <input class="input search" id="search" type="search" placeholder="Search notes, titles, sites…">
+        <div class="select-bar" id="select-bar" hidden>
+          <span id="selected-count">0 selected</span>
+          <button class="btn" id="select-all">Select all</button>
+          <button class="btn" id="cancel-select">Cancel</button>
+        </div>
+        <button class="btn" id="toggle-select">Select</button>
+        <button class="btn primary" id="generate" disabled>Generate prompt</button>
+      </div>
+    </header>
+
+    <div class="grid" id="grid"></div>
+
+    <div class="empty" id="empty" hidden>
+      <div class="empty-art"></div>
+      <h2>No references yet</h2>
+      <p>Open any website, click the Refboard icon in the toolbar, then pick a section or save the whole page.
+        Press <kbd>Alt+Shift+S</kbd> to jump straight into the section picker.</p>
+    </div>
+  </main>
+
+  <dialog id="detail" class="modal wide"></dialog>
+  <dialog id="generator" class="modal wide"></dialog>
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="board.js"></script>
+</body>
+</html>

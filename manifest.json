@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Refboard",
+  "version": "0.1.0",
+  "description": "Save website references with notes, then turn them into design prompts and DESIGN.md files for Claude Code.",
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Save to Refboard",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "permissions": ["activeTab", "scripting", "storage", "unlimitedStorage"],
+  "commands": {
+    "start-picker": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Pick a section of the current page to save"
+    }
+  }
+}
