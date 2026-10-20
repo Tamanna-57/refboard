@@ -10,6 +10,7 @@ const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const ICONS = {
   copy: svg('<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>'),
   download: svg('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>'),
+  trash: svg('<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>'),
   archive: svg('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>'),
 };
 
@@ -76,6 +77,7 @@ function renderToolbar() {
   $('#select-bar').hidden = !state.selecting;
   $('#toggle-select').hidden = state.selecting;
   $('#selected-count').textContent = `${state.selected.length} selected`;
+  $('#delete-selected').disabled = state.selected.length === 0;
   const gen = $('#generate');
   gen.disabled = state.selecting ? state.selected.length === 0 : visiblePins().length === 0;
   gen.textContent = state.selecting && state.selected.length ? `Generate from ${state.selected.length}` : 'Generate prompt';
@@ -87,6 +89,7 @@ function cardHtml(p) {
   return `
     <article class="card ${order >= 0 ? 'selected' : ''}" data-id="${esc(p.id)}">
       <span class="check">${order >= 0 ? order + 1 : ''}</span>
+      <button class="trash" data-delete title="Delete">${ICONS.trash}</button>
       ${p.designMd ? '<span class="attached" title="DESIGN.md attached">DESIGN.md</span>' : ''}
       ${p.thumb ? `<div class="thumb"><img src="${p.thumb}" alt="" loading="lazy"></div>` : ''}
       <div class="body">
@@ -111,12 +114,37 @@ function renderGrid() {
   $('h2', empty).textContent = state.pins.length ? 'Nothing matches these filters' : 'No references yet';
 }
 
-function toast(text) {
+function toast(text, action) {
   const t = $('#toast');
-  t.textContent = text;
+  const btn = $('button', t);
+  $('span', t).textContent = text;
+  btn.hidden = !action;
+  if (action) {
+    btn.textContent = action.label;
+    btn.onclick = () => {
+      t.hidden = true;
+      action.run();
+    };
+  }
   t.hidden = false;
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => (t.hidden = true), 1800);
+  toast.timer = setTimeout(() => (t.hidden = true), action ? 6000 : 1800);
+}
+
+// Deletes right away and offers Undo, so a mistake is one click to fix.
+async function removePins(ids) {
+  const removed = state.pins.filter((p) => ids.includes(p.id));
+  if (!removed.length) return;
+  for (const p of removed) await db.deletePin(p.id);
+  state.selected = state.selected.filter((id) => !ids.includes(id));
+  await load();
+  toast(`Deleted ${removed.length === 1 ? `"${removed[0].title}"` : `${removed.length} references`}`, {
+    label: 'Undo',
+    run: async () => {
+      for (const p of removed) await db.savePin(p);
+      await load();
+    },
+  });
 }
 
 function download(name, data, type) {
@@ -188,6 +216,7 @@ $('#cancel-select').onclick = () => {
   state.selected = [];
   render();
 };
+$('#delete-selected').onclick = () => removePins([...state.selected]);
 $('#select-all').onclick = () => {
   for (const p of visiblePins()) if (!state.selected.includes(p.id)) state.selected.push(p.id);
   render();
@@ -200,6 +229,7 @@ $('#grid').onclick = (e) => {
   const card = e.target.closest('.card');
   if (!card) return;
   const id = card.dataset.id;
+  if (e.target.closest('[data-delete]')) return removePins([id]);
   if (state.selecting) {
     const i = state.selected.indexOf(id);
     i >= 0 ? state.selected.splice(i, 1) : state.selected.push(id);
@@ -335,10 +365,9 @@ function openDetail(id) {
       await load();
       openDetail(id);
     }
-    if (act === 'delete' && confirm('Delete this reference?')) {
-      await db.deletePin(id);
+    if (act === 'delete') {
       dlg.close();
-      await load();
+      await removePins([id]);
     }
     if (act === 'save') {
       await db.savePin({
@@ -450,6 +479,11 @@ function openGenerator(pins) {
   refresh();
   dlg.showModal();
 }
+
+chrome.commands.getAll().then((cmds) => {
+  const shortcut = cmds.find((c) => c.name === 'start-picker')?.shortcut;
+  if (shortcut) $('#empty-shortcut').innerHTML = `, or press <kbd>${esc(shortcut)}</kbd>`;
+});
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.type === 'pinsChanged') load();

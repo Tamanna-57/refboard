@@ -1,4 +1,4 @@
-import { listBoards, createBoard, savePin, uid, DEFAULT_BOARD } from './lib/db.js';
+import { listBoards, createBoard, savePin, deletePin, uid, DEFAULT_BOARD } from './lib/db.js';
 
 const BOARD_URL = chrome.runtime.getURL('src/board/board.html');
 const THUMB_WIDTH = 520;
@@ -96,6 +96,11 @@ const handlers = {
     const pin = await storePin(msg.pin);
     return { ok: true, id: pin.id };
   },
+  async deletePin(msg) {
+    await deletePin(msg.id);
+    chrome.runtime.sendMessage({ type: 'pinsChanged' }).catch(() => {});
+    return { ok: true };
+  },
   async startPicker(msg) {
     await startPicker(msg.tabId);
     return { ok: true };
@@ -128,6 +133,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command === 'start-picker' && tab?.id) startPicker(tab.id).catch(console.warn);
+});
+
+// Right-click menu: a second way to start the picker that never clashes with
+// keyboard shortcuts. Clicking it also grants activeTab for the page.
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: 'pick', title: 'Pick a section to save in Refboard', contexts: ['all'] });
+    chrome.contextMenus.create({ id: 'board', title: 'Open Refboard', contexts: ['all'] });
+  });
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'pick' && tab?.id) startPicker(tab.id).catch(console.warn);
+  if (info.menuItemId === 'board') handlers.openBoard();
 });
 
 function friendlyError(err) {

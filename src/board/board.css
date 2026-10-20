@@ -163,8 +163,20 @@ pre { background: var(--surface); border: 1px solid var(--border); padding: 12px
 
 .toast {
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--surface);
-  padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; box-shadow: var(--shadow-lg); z-index: 100;
+  padding: 9px 10px 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; box-shadow: var(--shadow-lg); z-index: 100;
+  display: flex; align-items: center; gap: 14px;
 }
+.toast button { border: 0; background: #2a2a2a; color: #fff; border-radius: 6px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.toast button:hover { background: #3a3a3a; }
+.card .trash {
+  position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-2); display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 2;
+}
+.card .trash svg { width: 16px; height: 16px; }
+.card .trash:hover { color: var(--danger); border-color: var(--danger); }
+.card:hover .trash { display: flex; }
+body.selecting .card .trash { display: none; }
+.card:hover .attached { right: 46px; }
 
 @media (max-width: 760px) {
   body { grid-template-columns: 1fr; }

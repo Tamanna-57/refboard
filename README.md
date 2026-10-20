@@ -17,11 +17,16 @@ No build step and no dependencies. It's plain JavaScript.
 
 | Action | How |
 |---|---|
-| Save one section of a page | Toolbar icon → **Pick a section**, or press <kbd>Alt+Shift+S</kbd>. Hover, then click. <kbd>↑</kbd>/<kbd>↓</kbd> make the selection bigger or smaller, <kbd>Enter</kbd> picks it, <kbd>Esc</kbd> cancels. |
+| Save one section of a page | Toolbar icon → **Pick a section**, right-click the page → **Pick a section to save in Refboard**, or press <kbd>Ctrl+Shift+Y</kbd> (<kbd>⌘+Shift+Y</kbd> on Mac). Then **click** an element, or **drag** to draw a box around exactly what you want. <kbd>↑</kbd>/<kbd>↓</kbd> make a hovered selection bigger or smaller, <kbd>Enter</kbd> picks it, <kbd>Esc</kbd> cancels. |
+| Fix a mistake | In the save panel, **Re-pick** or **×** discards it. After saving, **Undo** removes it. On the board, hover a card → trash icon (with Undo), or **Select** several → **Delete**. |
 | Save a whole page | Toolbar icon → write a note → **Save whole page** |
 | Organize | Boards, focus tags (Layout, Typography, Color, Component, Animation…), free tags and search, all on the board page (**Open board**) |
 | Edit a reference | Click a card to edit its note and tags, move it to another board, view the palette, fonts, styles and HTML |
 | Generate | **Select** → click cards in the order you want → **Generate**. You can copy the prompt, download it as `.md`, or **Download ZIP** |
+
+### Keyboard shortcut not working?
+
+Chrome only applies an extension's default shortcut when it is first installed, and skips it if another extension already uses that key. (On Windows, avoid Alt+Shift combinations, because Alt+Shift switches the keyboard language.) To set or change it, open `chrome://extensions/shortcuts`, or click **Set shortcut** in the Refboard popup. The right-click menu always works.
 
 ### Using the output with Claude Code
 

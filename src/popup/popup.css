@@ -16,3 +16,5 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 #status { margin: 12px 0 0; padding: 10px 12px; border-radius: 9px; font-size: 13px; background: var(--surface-2); }
 #status.error { background: #fdecec; color: var(--danger); }
 #new-board { margin-top: 6px; }
+.shortcut-help { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 8px 2px 0; font-size: 12px; color: var(--text-3); }
+.shortcut-help a { color: var(--text); font-weight: 500; white-space: nowrap; }

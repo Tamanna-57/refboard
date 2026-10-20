@@ -22,10 +22,19 @@
     "service_worker": "src/background.js",
     "type": "module"
   },
-  "permissions": ["activeTab", "scripting", "storage", "unlimitedStorage"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "unlimitedStorage",
+    "contextMenus"
+  ],
   "commands": {
     "start-picker": {
-      "suggested_key": { "default": "Alt+Shift+S" },
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
       "description": "Pick a section of the current page to save"
     }
   }
