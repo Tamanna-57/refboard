@@ -46,6 +46,21 @@ $('#open-board').onclick = async () => {
   window.close();
 };
 
+// Show the shortcut Chrome actually assigned. Chrome leaves it empty if the key
+// clashes with another extension, so link to the page where it can be set.
+const command = (await chrome.commands.getAll()).find((c) => c.name === 'start-picker');
+if (command?.shortcut) {
+  $('#shortcut').textContent = command.shortcut;
+  $('#shortcut').hidden = false;
+  $('#set-shortcut').textContent = 'Change';
+} else {
+  $('#shortcut-text').innerHTML = 'No keyboard shortcut set. Right-click a page → <b>Pick a section to save in Refboard</b> also works.';
+}
+$('#set-shortcut').onclick = (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+};
+
 $('#pick').onclick = async () => {
   const res = await send({ type: 'startPicker', tabId: tab.id });
   if (res?.ok) window.close();

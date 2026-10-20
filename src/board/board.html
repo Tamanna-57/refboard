@@ -51,6 +51,7 @@
         <div class="select-bar" id="select-bar" hidden>
           <span id="selected-count">0 selected</span>
           <button class="btn" id="select-all">Select all</button>
+          <button class="btn danger" id="delete-selected">Delete</button>
           <button class="btn" id="cancel-select">Cancel</button>
         </div>
         <button class="btn" id="toggle-select">Select</button>
@@ -64,13 +65,13 @@
       <img class="logo" src="../../icons/logo.svg" alt="">
       <h2>No references yet</h2>
       <p>Open any website, click the Refboard icon in the toolbar, then pick a section or save the whole page.
-        Press <kbd>Alt+Shift+S</kbd> to jump straight into the section picker.</p>
+        You can also right-click any page → <b>Pick a section to save in Refboard</b><span id="empty-shortcut"></span>.</p>
     </div>
   </main>
 
   <dialog id="detail" class="modal wide"></dialog>
   <dialog id="generator" class="modal wide"></dialog>
-  <div class="toast" id="toast" hidden></div>
+  <div class="toast" id="toast" hidden><span></span><button type="button" hidden></button></div>
 
   <script type="module" src="board.js"></script>
 </body>
