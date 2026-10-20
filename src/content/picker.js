@@ -14,35 +14,35 @@
       :host { all: initial; }
       [hidden] { display: none !important; }
       * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-      .box { position: fixed; border: 2px solid #6d5dfc; background: rgba(109, 93, 252, 0.12); border-radius: 4px;
+      .box { position: fixed; border: 2px solid #0a0a0a; outline: 1px solid #fff; background: rgba(10, 10, 10, 0.08); border-radius: 4px;
              pointer-events: none; transition: all 60ms ease-out; display: none; }
-      .label { position: fixed; background: #6d5dfc; color: #fff; font-size: 11px; padding: 3px 7px; border-radius: 4px;
+      .label { position: fixed; background: #0a0a0a; color: #fff; font-size: 11px; padding: 3px 7px; border-radius: 4px;
                pointer-events: none; white-space: nowrap; display: none; font-family: ui-monospace, Menlo, monospace; }
-      .hint { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: #16151c; color: #f4f3f8;
+      .hint { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: #0a0a0a; color: #fff;
               font-size: 13px; padding: 9px 14px; border-radius: 999px; box-shadow: 0 8px 24px rgba(0,0,0,.25); pointer-events: none; }
-      .hint kbd { background: #2c2a36; border-radius: 4px; padding: 1px 6px; font-family: inherit; font-size: 12px; }
+      .hint kbd { background: #2a2a2a; border-radius: 4px; padding: 1px 6px; font-family: inherit; font-size: 12px; }
       .panel { position: fixed; top: 16px; right: 16px; width: 340px; max-height: calc(100vh - 32px); overflow: auto;
-               background: #fff; color: #16151c; border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.06);
-               padding: 16px; pointer-events: auto; font-size: 13px; }
-      .panel h2 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
-      .panel h2 span { width: 10px; height: 10px; border-radius: 3px; background: #6d5dfc; }
-      .shot { width: 100%; max-height: 180px; object-fit: contain; background: #f2f1f6; border-radius: 8px; display: block; margin-bottom: 12px; }
-      label { display: block; font-size: 11px; font-weight: 600; color: #5d5a6b; margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em; }
-      input, textarea, select { width: 100%; border: 1px solid #dcdae4; border-radius: 8px; padding: 8px 10px; font-size: 13px;
-                                color: #16151c; background: #fff; outline: none; }
-      input:focus, textarea:focus, select:focus { border-color: #6d5dfc; box-shadow: 0 0 0 3px rgba(109,93,252,.18); }
+               background: #fff; color: #0a0a0a; border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.25), 0 0 0 1px rgba(0,0,0,.08);
+               padding: 18px; pointer-events: auto; font-size: 13px; }
+      .panel h2 { font-size: 16px; font-weight: 700; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; color: #0a0a0a; }
+      .panel h2 svg { width: 24px; height: 24px; flex: none; }
+      .shot { width: 100%; max-height: 180px; object-fit: contain; background: #f4f4f4; border-radius: 8px; display: block; margin-bottom: 12px; }
+      label { display: block; font-size: 12.5px; font-weight: 500; color: #8c8c8c; margin: 12px 0 5px; }
+      input, textarea, select { width: 100%; border: 1px solid #e3e3e3; border-radius: 8px; padding: 8px 10px; font-size: 13px;
+                                color: #0a0a0a; background: #fff; outline: none; }
+      input:focus, textarea:focus, select:focus { border-color: #0a0a0a; }
       textarea { min-height: 84px; resize: vertical; line-height: 1.45; }
       .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-      .chip { border: 1px solid #dcdae4; background: #fff; color: #3b3947; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
-      .chip[aria-pressed="true"] { background: #6d5dfc; border-color: #6d5dfc; color: #fff; }
+      .chip { border: 1px solid #e3e3e3; background: #fff; color: #4a4a4a; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+      .chip[aria-pressed="true"] { background: #0a0a0a; border-color: #0a0a0a; color: #fff; }
       .row { display: flex; gap: 8px; margin-top: 14px; }
-      button.primary, button.ghost { flex: 1; border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; cursor: pointer; border: 0; }
-      button.primary { background: #6d5dfc; color: #fff; }
+      button.primary, button.ghost { flex: 1; border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid #e3e3e3; }
+      button.primary { background: #0a0a0a; border-color: #0a0a0a; color: #fff; }
       button.primary:disabled { opacity: .6; cursor: default; }
-      button.ghost { background: #f2f1f6; color: #3b3947; }
-      .meta { font-size: 11px; color: #85829a; margin-top: 8px; font-family: ui-monospace, Menlo, monospace; word-break: break-all; }
+      button.ghost { background: #fff; color: #0a0a0a; }
+      .meta { font-size: 11px; color: #8c8c8c; margin-top: 8px; font-family: ui-monospace, Menlo, monospace; word-break: break-all; }
       .swatches { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
-      .swatches i { width: 18px; height: 18px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.1); }
+      .swatches i { width: 18px; height: 18px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
       .done { text-align: center; padding: 18px 4px 6px; }
       .done b { display: block; font-size: 15px; margin-bottom: 6px; }
       .error { color: #c22; font-size: 12px; margin-top: 8px; }
@@ -173,7 +173,7 @@
     const panel = document.createElement('div');
     panel.className = 'panel';
     panel.innerHTML = `
-      <h2><span></span>Save to Refboard</h2>
+      <h2><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.2 28 9.1v13.8L16 29.8 4 22.9V9.1Z" fill="#0a0a0a" stroke="#0a0a0a" stroke-width="2.4" stroke-linejoin="round"/><path d="M11.6 9.4h8.8v13.2L16 19.4l-4.4 3.2Z" fill="#fff"/></svg>Save to Refboard</h2>
       ${shot?.image ? `<img class="shot" alt="">` : ''}
       <label for="rb-title">Title</label>
       <input id="rb-title">
