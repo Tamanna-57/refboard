@@ -6,6 +6,13 @@ import { createZip, dataUrlToBytes } from '../lib/zip.js';
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICONS = {
+  copy: svg('<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>'),
+  download: svg('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>'),
+  archive: svg('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>'),
+};
+
 const state = {
   pins: [],
   boards: [],
@@ -230,9 +237,36 @@ $('#import-file').onchange = async (e) => {
 /* ---------- Detail dialog ---------- */
 
 function kvTable(obj) {
-  const rows = Object.entries(obj || {});
+  const rows = Object.entries(obj || {}).filter(([, v]) => v);
   if (!rows.length) return '';
   return `<table class="kv">${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td><code>${esc(v)}</code></td></tr>`).join('')}</table>`;
+}
+
+// Collapsible gray card, styled after the DESIGN.md Inspector sections.
+function section(title, count, body, open = true) {
+  if (!body) return '';
+  return `<details class="section" ${open ? 'open' : ''}><summary>${esc(title)}<span class="count">${esc(count)}</span></summary><div class="section-body">${body}</div></details>`;
+}
+
+const ROLE_LABELS = { background: 'Background', text: 'Text', border: 'Border' };
+const SIZE_NAMES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl', 'text-4xl', 'text-5xl', 'text-6xl'];
+
+function colorsSection(palette = []) {
+  const rows = palette
+    .map((c) => `<button class="color-row" data-copy="${esc(c.hex)}" title="Copy ${esc(c.hex)}"><i style="background:${esc(c.hex)}"></i><code>${esc(c.hex.toUpperCase())}</code><span>${esc(c.roles.map((r) => ROLE_LABELS[r] || r).join(' · '))}</span></button>`)
+    .join('');
+  return section('Colors', `${palette.length} tokens`, rows);
+}
+
+function typographySection(fonts = [], typeScale = []) {
+  if (!fonts.length) return '';
+  const samples = fonts
+    .map((f, i) => `<div class="font-sample"><div class="aa" style="font-family:${esc(f.stack)}">Aa</div><div class="name">${esc(f.family)}${i === 0 ? ' (primary)' : ''} · ${esc(f.weights.join(', '))}</div></div>`)
+    .join('');
+  const sizes = [...new Set(typeScale.map((t) => parseFloat(t.size)))].sort((a, b) => a - b);
+  const pills = sizes.map((px, i) => `<span class="pill">${SIZE_NAMES[i] || `text-${i}`} (${Math.round(px)}px)</span>`).join('');
+  const scale = sizes.length ? `<div class="sub">Size Scale</div><div class="pills">${pills}</div>` : '';
+  return section('Typography', `${fonts.length} font${fonts.length === 1 ? '' : 's'}, ${sizes.length} sizes`, samples + scale);
 }
 
 function openDetail(id) {
@@ -242,7 +276,10 @@ function openDetail(id) {
   const dlg = $('#detail');
   dlg.innerHTML = `
     <div class="modal-head">
-      <h2>${pin.kind === 'element' ? 'Saved section' : 'Saved page'}</h2>
+      <div class="heading">
+        <img class="logo" src="../../icons/logo.svg" alt="">
+        <div><h2>${esc(pin.title)}</h2><p>${pin.kind === 'element' ? 'Saved section' : 'Saved page'} · ${esc(pin.hostname)}</p></div>
+      </div>
       <button class="close" data-close aria-label="Close">×</button>
     </div>
     <div class="modal-body detail">
@@ -270,14 +307,13 @@ function openDetail(id) {
           <button class="btn primary" data-act="save">Save changes</button>
         </div>
 
-        <div class="measure">
-          ${a.palette?.length ? `<h4>Palette <small>(click to copy)</small></h4><div class="palette">${a.palette.map((c) => `<button data-copy="${esc(c.hex)}" title="${esc(c.roles.join(', '))}"><i style="background:${esc(c.hex)}"></i>${esc(c.hex)}</button>`).join('')}</div>` : ''}
-          ${a.fonts?.length ? `<h4>Fonts</h4>${kvTable(Object.fromEntries(a.fonts.map((f) => [f.family, 'weights ' + f.weights.join(', ')])))}` : ''}
-          ${a.typeScale?.length ? `<h4>Type scale</h4>${kvTable(Object.fromEntries(a.typeScale.map((t) => [`${t.size} / ${t.weight}`, `${t.family} · line-height ${t.lineHeight} · ${t.tags.join(', ')}`])))}` : ''}
-          ${pin.kind === 'element' && Object.keys(a.keyStyles || {}).length ? `<h4>Styles of this section</h4>${kvTable(a.keyStyles)}` : ''}
-          ${a.radii?.length || a.shadows?.length || a.transitions?.length ? `<h4>Radius · shadow · motion</h4>${kvTable({ radius: (a.radii || []).join('  ·  '), shadow: (a.shadows || [])[0], motion: (a.transitions || [])[0] })}` : ''}
-          ${Object.keys(a.cssVars || {}).length ? `<details><summary>${Object.keys(a.cssVars).length} CSS variables from the site</summary>${kvTable(a.cssVars)}</details>` : ''}
-          ${a.html ? `<details><summary>HTML structure</summary><pre>${esc(a.html)}</pre></details>` : ''}
+        <div class="sections">
+          ${colorsSection(a.palette)}
+          ${typographySection(a.fonts, a.typeScale)}
+          ${pin.kind === 'element' ? section('Section styles', `${Object.keys(a.keyStyles || {}).length} properties`, kvTable(a.keyStyles)) : ''}
+          ${section('Radius, shadow & motion', `${(a.radii?.length || 0) + (a.shadows?.length || 0) + (a.transitions?.length || 0)} tokens`, kvTable({ radius: (a.radii || []).join('  ·  '), shadow: (a.shadows || [])[0], motion: (a.transitions || [])[0], spacing: (a.spacing || []).join('  ·  ') }))}
+          ${section('CSS variables', `${Object.keys(a.cssVars || {}).length} tokens`, kvTable(a.cssVars), false)}
+          ${a.html ? section('HTML structure', `${Math.ceil(a.html.length / 1024)} KB`, `<pre>${esc(a.html)}</pre>`, false) : ''}
         </div>
       </div>
     </div>`;
@@ -340,7 +376,10 @@ function openGenerator(pins) {
   let tab = 'prompt';
   dlg.innerHTML = `
     <div class="modal-head">
-      <h2>Generate from ${pins.length} reference${pins.length === 1 ? '' : 's'}</h2>
+      <div class="heading">
+        <img class="logo" src="../../icons/logo.svg" alt="">
+        <div><h2>Generate prompt</h2><p>Turn ${pins.length} reference${pins.length === 1 ? '' : 's'} into PROMPT.md and DESIGN.md for Claude Code.</p></div>
+      </div>
       <button class="close" data-close aria-label="Close">×</button>
     </div>
     <div class="modal-body">
@@ -349,16 +388,26 @@ function openGenerator(pins) {
         <label class="check-label"><input type="checkbox" name="html"> Include HTML structure</label>
         <label class="check-label"><input type="checkbox" name="designmd" ${hasDesignMd ? 'checked' : 'disabled'}> Include attached DESIGN.md files</label>
       </div>
-      <div class="tabs" role="tablist">
-        <button role="tab" data-tab="prompt" aria-selected="true">Claude Code prompt</button>
-        <button role="tab" data-tab="design" aria-selected="false">DESIGN.md</button>
+      <div class="tab-bar">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="prompt" aria-selected="true">PROMPT.md</button>
+          <button role="tab" data-tab="design" aria-selected="false">DESIGN.md</button>
+        </div>
+        <div class="tab-tools">
+          <button class="icon-btn" data-act="copy" title="Copy">${ICONS.copy}</button>
+          <button class="icon-btn" data-act="md" title="Download .md">${ICONS.download}</button>
+          <button class="icon-btn" data-act="zip" title="Download ZIP with screenshots">${ICONS.archive}</button>
+        </div>
       </div>
       <textarea class="output" readonly spellcheck="false"></textarea>
-      <div class="gen-actions">
-        <button class="btn primary" data-act="zip">Download ZIP</button>
-        <button class="btn" data-act="copy">Copy</button>
-        <button class="btn" data-act="md">Download .md</button>
-        <span class="hint">${hasImages ? 'The ZIP has PROMPT.md, DESIGN.md and the screenshots in refs/. Unzip it into your project, then tell Claude Code: <em>"Read refboard/PROMPT.md and follow it."</em>' : 'Unzip into your project, then tell Claude Code: <em>"Read refboard/PROMPT.md and follow it."</em>'}</span>
+      <div class="use">
+        <h4>Use with Claude Code</h4>
+        <div class="use-row">
+          <button class="btn" data-act="zip">${ICONS.archive} Download ZIP</button>
+          <button class="btn" data-act="copy">${ICONS.copy} Copy</button>
+          <button class="btn" data-act="md">${ICONS.download} Download .md</button>
+        </div>
+        <p>${hasImages ? 'The ZIP has PROMPT.md, DESIGN.md and the screenshots in <code>refs/</code>. ' : ''}Unzip it into your project, then tell Claude Code: <code>Read refboard/PROMPT.md and follow it.</code></p>
       </div>
     </div>`;
 

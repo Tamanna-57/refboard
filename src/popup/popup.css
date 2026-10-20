@@ -1,16 +1,18 @@
-body { width: 340px; padding: 14px; background: var(--surface); }
-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
-.logo { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg, var(--accent), #b06cff); }
-.page { display: flex; gap: 10px; align-items: center; padding: 10px; background: var(--surface-2); border-radius: 10px; margin-bottom: 12px; }
+body { width: 360px; padding: 16px; background: var(--surface); }
+header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand .logo { width: 30px; height: 30px; }
+.brand b { display: block; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.brand small { display: block; font-size: 12px; color: var(--text-3); }
+.page { display: flex; gap: 10px; align-items: center; padding: 12px 14px; background: var(--surface-2); border-radius: 10px; margin-bottom: 12px; }
 .page img { width: 20px; height: 20px; border-radius: 4px; flex: none; }
 #page-title { font-weight: 600; font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-#page-host { color: var(--text-3); font-size: 12px; }
-.big { width: 100%; padding: 11px 12px; font-size: 14px; justify-content: space-between; }
-.big kbd { font: 11px var(--mono); background: rgba(255, 255, 255, 0.2); border-radius: 5px; padding: 2px 6px; }
-.divider { display: flex; align-items: center; gap: 10px; color: var(--text-3); font-size: 12px; margin: 14px 0 2px; }
+#page-host { color: var(--text-3); font: 12px var(--mono); }
+.big { width: 100%; padding: 12px 14px; font-size: 14px; justify-content: space-between; border-radius: 9px; }
+.big kbd { font: 11px var(--mono); background: rgba(255, 255, 255, 0.16); border-radius: 5px; padding: 2px 6px; }
+.divider { display: flex; align-items: center; gap: 10px; color: var(--text-3); font-size: 12px; margin: 16px 0 2px; }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-#save-page { width: 100%; margin-top: 14px; }
-#status { margin: 12px 0 0; padding: 9px 10px; border-radius: 9px; font-size: 13px; background: var(--accent-soft); }
-#status.error { background: rgba(211, 59, 59, 0.12); color: var(--danger); }
+#save-page { width: 100%; margin-top: 16px; padding: 10px 14px; font-size: 14px; border-radius: 9px; }
+#status { margin: 12px 0 0; padding: 10px 12px; border-radius: 9px; font-size: 13px; background: var(--surface-2); }
+#status.error { background: #fdecec; color: var(--danger); }
 #new-board { margin-top: 6px; }
