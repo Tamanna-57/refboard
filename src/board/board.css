@@ -217,3 +217,4 @@ body.selecting .card .trash { display: none; }
 .md-output { height: 58vh; border-radius: 10px; }
 .detail .actions { margin-top: 18px; }
 .card .sysline { margin-top: 8px; font: 11px var(--mono); color: var(--text-3); }
+.sidebar .version { padding: 8px 10px 0; font: 11px var(--mono); color: var(--text-3); }

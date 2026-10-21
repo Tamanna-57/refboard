@@ -4,6 +4,7 @@ const $ = (sel) => document.querySelector(sel);
 const send = (msg) => chrome.runtime.sendMessage(msg);
 
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+$('#version').textContent = `v${chrome.runtime.getManifest().version}`;
 
 $('#page-title').textContent = tab?.title || 'This page';
 try {

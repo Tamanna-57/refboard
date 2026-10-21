@@ -619,6 +619,8 @@ function openGenerator(pins) {
   dlg.showModal();
 }
 
+$('#version').textContent = `Refboard v${chrome.runtime.getManifest().version}`;
+
 chrome.commands.getAll().then((cmds) => {
   const shortcut = cmds.find((c) => c.name === 'start-picker')?.shortcut;
   if (shortcut) $('#empty-shortcut').innerHTML = `, or press <kbd>${esc(shortcut)}</kbd>`;
