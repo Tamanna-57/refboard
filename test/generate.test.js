@@ -86,7 +86,7 @@ test('optional sections can be turned off', () => {
 test('DESIGN.md has tokens, CSS variables and components', () => {
   const out = buildDesignMd([nav, page], { project: 'Acme', date: '2026-10-20' });
   assert.match(out, /# Acme — Design System/);
-  assert.match(out, /--color-accent-1: #/);
+  assert.match(out, /--color-accent: #/);
   assert.match(out, /--font-primary: sohne-var, sans-serif;/);
   assert.match(out, /### Navigation: Linear/);
 });

@@ -88,12 +88,14 @@ async function startPicker(tabId) {
 }
 
 async function savePage(tabId, windowId, fields) {
+  // Remove any open picker/panel first so it doesn't end up in the screenshot.
+  await chrome.scripting.executeScript({ target: { tabId }, func: resetPage });
   await injectAnalyzer(tabId);
+  const image = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
   const [{ result: data }] = await chrome.scripting.executeScript({
     target: { tabId },
     func: () => window.__refboardAnalyze.page(),
   });
-  const image = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
   return storePin({ ...data, ...fields, kind: 'page', title: fields.title || data.title, image });
 }
 

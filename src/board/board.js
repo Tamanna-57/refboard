@@ -1,6 +1,7 @@
 import * as db from '../lib/db.js';
 import { CATEGORIES } from '../lib/constants.js';
-import { buildPrompt, buildDesignMd, imageFiles } from '../lib/generate.js';
+import { buildPrompt, buildDesignMd, bundleFiles, slug } from '../lib/generate.js';
+import { buildSiteDesignMd, siteOf, siteSummary } from '../lib/design-md.js';
 import { createZip, dataUrlToBytes } from '../lib/zip.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -10,6 +11,7 @@ const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const ICONS = {
   copy: svg('<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>'),
   download: svg('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>'),
+  external: svg('<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>'),
   trash: svg('<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>'),
   archive: svg('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>'),
 };
@@ -83,6 +85,15 @@ function renderToolbar() {
   gen.textContent = state.selecting && state.selected.length ? `Generate from ${state.selected.length}` : 'Generate prompt';
 }
 
+function systemLine(p) {
+  const sys = siteOf(p);
+  if (!sys?.colors) return '';
+  const parts = [`${sys.colors.length} colors`, `${sys.typography?.families?.length || 0} fonts`];
+  if (sys.spacing?.base) parts.push(`${sys.spacing.base}px grid`);
+  if (sys.components?.buttons?.length) parts.push(`${sys.components.buttons.length} button styles`);
+  return `<div class="sysline">${esc(parts.join(' · '))}</div>`;
+}
+
 function cardHtml(p) {
   const order = state.selected.indexOf(p.id);
   const swatches = (p.analysis?.palette || []).slice(0, 8).map((c) => `<i style="background:${esc(c.hex)}"></i>`).join('');
@@ -96,6 +107,7 @@ function cardHtml(p) {
         <div class="title">${esc(p.title)}</div>
         ${p.note ? `<div class="note">${esc(p.note)}</div>` : ''}
         ${swatches ? `<div class="swatches">${swatches}</div>` : ''}
+        ${systemLine(p)}
         ${p.categories?.length ? `<div class="cats">${p.categories.map((c) => `<span class="tag">${esc(c)}</span>`).join('')}</div>` : ''}
         <div class="meta">
           ${p.favicon ? `<img src="${esc(p.favicon)}" alt="">` : ''}
@@ -278,78 +290,186 @@ function section(title, count, body, open = true) {
   return `<details class="section" ${open ? 'open' : ''}><summary>${esc(title)}<span class="count">${esc(count)}</span></summary><div class="section-body">${body}</div></details>`;
 }
 
-const ROLE_LABELS = { background: 'Background', text: 'Text', border: 'Border' };
-const SIZE_NAMES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl', 'text-4xl', 'text-5xl', 'text-6xl'];
+const pills = (items) => `<div class="pills">${items.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>`;
+const sub = (t) => `<div class="sub">${esc(t)}</div>`;
+const LEGACY_ROLES = { background: 'Background', text: 'Text', border: 'Border' };
 
-function colorsSection(palette = []) {
-  const rows = palette
-    .map((c) => `<button class="color-row" data-copy="${esc(c.hex)}" title="Copy ${esc(c.hex)}"><i style="background:${esc(c.hex)}"></i><code>${esc(c.hex.toUpperCase())}</code><span>${esc(c.roles.map((r) => ROLE_LABELS[r] || r).join(' · '))}</span></button>`)
+function colorsSection(colors = []) {
+  const rows = colors
+    .map((c) => {
+      const role = c.role || (c.roles || []).map((r) => LEGACY_ROLES[r] || r).join(' · ');
+      return `<button class="color-row" data-copy="${esc(c.hex)}" title="Copy ${esc(c.hex)}"><i style="background:${esc(c.hex)}"></i><code>${esc(c.hex.toUpperCase())}</code>${c.token ? `<em>${esc(c.token)}</em>` : ''}<span>${esc(role)}</span></button>`;
+    })
     .join('');
-  return section('Colors', `${palette.length} tokens`, rows);
+  return section('Colors', `${colors.length} tokens`, rows);
 }
 
-function typographySection(fonts = [], typeScale = []) {
+function fontSamples(families) {
+  return families
+    .map((f, i) => {
+      const usage = f.usage?.length ? f.usage.join(', ') : i === 0 ? 'primary' : '';
+      const share = f.share !== undefined && f.share <= 100 ? ` · ${f.share}% of text` : '';
+      return `<div class="font-sample"><div class="aa" style="font-family:${esc(f.stack)}">Aa</div><div class="name">${esc(f.family)}${usage ? ` (${esc(usage)})` : ''} · ${esc(f.weights.join(', '))}${share}</div></div>`;
+    })
+    .join('');
+}
+
+// Full typography card from a measured system.
+function typographySystem(t) {
+  if (!t?.families?.length) return '';
+  const elements = Object.entries(t.elements || {});
+  const body = [
+    fontSamples(t.families),
+    t.scale?.length ? sub('Size Scale') + pills(t.scale.map((s) => `${s.name} (${s.size})`)) : '',
+    t.weights?.length ? sub('Weight Scale') + pills(t.weights) : '',
+    t.lineHeights?.length ? sub('Line Heights') + pills(t.lineHeights.map(String)) : '',
+    elements.length
+      ? sub('Element Styles') + kvTable(Object.fromEntries(elements.map(([k, v]) => [k, `${v.family} ${v.size} / ${v.weight}${v.lineHeight !== 'normal' ? ` / ${v.lineHeight}` : ''}${v.transform ? ` · ${v.transform}` : ''}`])))
+      : '',
+  ].join('');
+  return section('Typography', `${t.families.length} font${t.families.length === 1 ? '' : 's'}, ${t.scale?.length || 0} sizes`, body);
+}
+
+// Typography card for pins saved before Refboard measured full systems.
+function typographyLegacy(fonts = [], typeScale = []) {
   if (!fonts.length) return '';
-  const samples = fonts
-    .map((f, i) => `<div class="font-sample"><div class="aa" style="font-family:${esc(f.stack)}">Aa</div><div class="name">${esc(f.family)}${i === 0 ? ' (primary)' : ''} · ${esc(f.weights.join(', '))}</div></div>`)
-    .join('');
-  const sizes = [...new Set(typeScale.map((t) => parseFloat(t.size)))].sort((a, b) => a - b);
-  const pills = sizes.map((px, i) => `<span class="pill">${SIZE_NAMES[i] || `text-${i}`} (${Math.round(px)}px)</span>`).join('');
-  const scale = sizes.length ? `<div class="sub">Size Scale</div><div class="pills">${pills}</div>` : '';
-  return section('Typography', `${fonts.length} font${fonts.length === 1 ? '' : 's'}, ${sizes.length} sizes`, samples + scale);
+  const sizes = [...new Set(typeScale.map((t) => Math.round(parseFloat(t.size))))].sort((a, b) => a - b);
+  return section('Typography', `${fonts.length} fonts, ${sizes.length} sizes`, fontSamples(fonts) + (sizes.length ? sub('Size Scale') + pills(sizes.map((px) => `${px}px`)) : ''));
 }
 
-function openDetail(id) {
+// Renders a captured component style as a live preview.
+const SAFE_PROPS = /^(background-color|color|border|border-radius|padding|font-family|font-size|font-weight|text-transform|letter-spacing|box-shadow|text-decoration-line|height)$/;
+function preview(kind, v) {
+  const style = Object.entries(v.styles).filter(([k]) => SAFE_PROPS.test(k)).map(([k, val]) => `${k}:${String(val).replace(/[;"<>]/g, '')}`).join(';');
+  const label = esc(v.sample || { buttons: 'Button', badges: 'Badge', links: 'Link', inputs: '', cards: '' }[kind] || '');
+  if (kind === 'inputs') return `<input class="cmp-input" style="${style}" placeholder="Input" tabindex="-1">`;
+  if (kind === 'cards') return `<div class="cmp-card" style="${style}"><b>Card</b><span>${label || 'Example content'}</span></div>`;
+  return `<span class="cmp-inline" style="${style}">${label}</span>`;
+}
+
+function componentsSection(c) {
+  if (!c) return '';
+  const groups = [['buttons', 'Buttons'], ['inputs', 'Inputs'], ['cards', 'Cards'], ['badges', 'Badges'], ['links', 'Links']].filter(([k]) => c[k]?.length);
+  if (!groups.length) return '';
+  const body = groups
+    .map(([k, title]) => sub(title) + c[k].map((v) => `<div class="cmp">${preview(k, v)}<details><summary>${v.count} on page · styles</summary>${kvTable(v.styles)}</details></div>`).join(''))
+    .join('');
+  return section('Components', `${groups.reduce((n, [k]) => n + c[k].length, 0)} variants`, body);
+}
+
+function shadowsSection(shadows = []) {
+  if (!shadows.length) return '';
+  const rows = shadows.map((s) => `<div class="shadow-row"><i style="box-shadow:${esc(s.value)}"></i><div><b>${esc(s.name)}</b><code>${esc(s.value)}</code></div></div>`).join('');
+  return section('Elevation', `${shadows.length} levels`, rows);
+}
+
+function systemSections(sys, { open = true } = {}) {
+  const sp = sys.spacing || {};
+  const m = sys.motion || {};
+  const l = sys.layout || {};
+  return [
+    colorsSection(sys.colors),
+    typographySystem(sys.typography),
+    section('Spacing', sp.base ? `${sp.base}px grid` : `${sp.scale?.length || 0} values`, sp.scale?.length ? pills(sp.scale) : '', open),
+    section('Border radius', `${sys.radius?.length || 0} values`, sys.radius?.length ? pills(sys.radius.map((r) => `${r.value}${r.full ? ' (pill)' : ''}`)) : '', open),
+    shadowsSection(sys.shadows),
+    section('Motion', `${(m.durations?.length || 0) + (m.animations?.length || 0)} tokens`,
+      [m.durations?.length && sub('Durations') + pills(m.durations), m.easings?.length && sub('Easing') + pills(m.easings), m.animations?.length && sub('Keyframes') + pills(m.animations)].filter(Boolean).join(''), open),
+    section('Layout', `${sys.breakpoints?.length || 0} breakpoints`,
+      [l.containerWidths?.length && sub('Container widths') + pills(l.containerWidths.map((w) => `${w}px`)), l.gridColumns?.length && sub('Grid columns') + pills(l.gridColumns.map(String)), sys.breakpoints?.length && sub('Breakpoints') + pills(sys.breakpoints.map((b) => `${b}px`))].filter(Boolean).join(''), open),
+    componentsSection(sys.components),
+    section('CSS variables', `${Object.keys(sys.cssVars || {}).length} tokens`, kvTable(sys.cssVars), false),
+  ].join('');
+}
+
+function sectionTab(pin) {
+  const a = pin.analysis || {};
+  const styles = section('Section styles', `${Object.keys(a.keyStyles || {}).length} properties`, kvTable(a.keyStyles));
+  const html = a.html ? section('HTML structure', `${Math.ceil(a.html.length / 1024)} KB`, `<pre>${esc(a.html)}</pre>`, false) : '';
+  if (a.system) return styles + systemSections({ ...a.system, cssVars: {} }) + html;
+  return (
+    styles +
+    colorsSection(a.palette) +
+    typographyLegacy(a.fonts, a.typeScale) +
+    section('Radius, shadow & motion', 'measured', kvTable({ radius: (a.radii || []).join('  ·  '), shadow: (a.shadows || [])[0], motion: (a.transitions || [])[0] })) +
+    html
+  );
+}
+
+function systemTab(pin) {
+  const sys = siteOf(pin);
+  if (!sys?.colors) {
+    const a = pin.analysis || {};
+    return `<p class="notice">This reference was saved with an older version of Refboard, so only a short summary was measured. Save it again to get the full design system.</p>${colorsSection(a.palette)}${typographyLegacy(a.fonts, a.typeScale)}`;
+  }
+  const truncated = sys.stats?.truncated ? ' Very large page, so a sample of it was scanned.' : '';
+  return `<p class="summary">${esc(siteSummary(sys))}${esc(truncated)}</p>${systemSections(sys)}`;
+}
+
+function designMdTab(pin) {
+  return `
+    <div class="md-tools">
+      <span>${pin.designMd ? `Your attached <code>${esc(pin.designMd.name)}</code> is included in prompts too.` : 'Generated from this site, ready for Claude Code.'}</span>
+      <button class="icon-btn" data-act="copy-md" title="Copy">${ICONS.copy}</button>
+      <button class="icon-btn" data-act="download-md" title="Download">${ICONS.download}</button>
+    </div>
+    <textarea class="output md-output" readonly spellcheck="false">${esc(buildSiteDesignMd(pin))}</textarea>`;
+}
+
+function detailsTab(pin) {
+  return `
+    <div class="source">${esc(pin.pageTitle || '')}<br><a href="${esc(pin.url)}" target="_blank" rel="noopener">${esc(pin.url)}</a></div>
+    <label class="field"><span>Title</span><input class="input" name="title" value="${esc(pin.title)}"></label>
+    <label class="field"><span>What do you want to use from this?</span><textarea class="input" name="note" rows="4">${esc(pin.note)}</textarea></label>
+    <div class="field"><span>Focus</span><div class="chips">${CATEGORIES.map((c) => `<button type="button" class="chip" data-cat="${c}" aria-pressed="${!!pin.categories?.includes(c)}">${c}</button>`).join('')}</div></div>
+    <label class="field"><span>Tags</span><input class="input" name="tags" value="${esc((pin.tags || []).join(', '))}"></label>
+    <label class="field"><span>Board</span><select class="input" name="board">${state.boards.map((b) => `<option value="${esc(b.id)}" ${b.id === pin.boardId ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select></label>
+    <div class="actions">
+      <button class="btn danger" data-act="delete">${ICONS.trash} Delete</button>
+      <span class="spacer"></span>
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn primary" data-act="save">Save changes</button>
+    </div>
+    <div class="attach">
+      <strong>Own DESIGN.md</strong> (optional): Refboard already generates one in the DESIGN.md tab. If you also have one from another tool, attach it and it will be included in prompts.
+      <div class="row">
+        ${pin.designMd ? `<span class="tag">${esc(pin.designMd.name)} · ${Math.ceil(pin.designMd.text.length / 1024)} KB</span><button class="btn" data-act="detach">Remove</button>` : '<button class="btn" data-act="attach">Attach .md file</button>'}
+        <input type="file" accept=".md,.markdown,text/markdown,text/plain" hidden>
+      </div>
+    </div>`;
+}
+
+function openDetail(id, tab = 'details') {
   const pin = state.pins.find((p) => p.id === id);
   if (!pin) return;
-  const a = pin.analysis || {};
   const dlg = $('#detail');
+  const tabs = [['details', 'Details'], pin.kind === 'element' && ['section', 'This section'], ['system', 'Design system'], ['md', 'DESIGN.md']].filter(Boolean);
+  if (!tabs.some(([k]) => k === tab)) tab = 'details';
+  const date = new Date(pin.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   dlg.innerHTML = `
     <div class="modal-head">
       <div class="heading">
         <img class="logo" src="../../icons/logo.svg" alt="">
-        <div><h2>${esc(pin.title)}</h2><p>${pin.kind === 'element' ? 'Saved section' : 'Saved page'} · ${esc(pin.hostname)}</p></div>
+        <div><h2>${esc(pin.title)}</h2><p>${pin.kind === 'element' ? 'Saved section' : 'Saved page'} · ${esc(pin.hostname)} · ${esc(date)}</p></div>
       </div>
-      <button class="close" data-close aria-label="Close">×</button>
+      <div class="head-tools">
+        <a class="icon-btn" href="${esc(pin.url)}" target="_blank" rel="noopener" title="Open the site">${ICONS.external}</a>
+        <button class="icon-btn danger" data-act="delete" title="Delete this reference (Delete key)">${ICONS.trash}</button>
+        <button class="close" data-close aria-label="Close">×</button>
+      </div>
     </div>
     <div class="modal-body detail">
       <div class="shot">${pin.image || pin.thumb ? `<img src="${pin.image || pin.thumb}" alt="">` : ''}</div>
-      <div>
-        <div class="source">${esc(pin.pageTitle || '')}<br><a href="${esc(pin.url)}" target="_blank" rel="noopener">${esc(pin.url)}</a></div>
-        <label class="field"><span>Title</span><input class="input" name="title" value="${esc(pin.title)}"></label>
-        <label class="field"><span>What do you want to use from this?</span><textarea class="input" name="note" rows="4">${esc(pin.note)}</textarea></label>
-        <div class="field"><span>Focus</span><div class="chips">${CATEGORIES.map((c) => `<button type="button" class="chip" data-cat="${c}" aria-pressed="${!!pin.categories?.includes(c)}">${c}</button>`).join('')}</div></div>
-        <label class="field"><span>Tags</span><input class="input" name="tags" value="${esc((pin.tags || []).join(', '))}"></label>
-        <label class="field"><span>Board</span><select class="input" name="board">${state.boards.map((b) => `<option value="${esc(b.id)}" ${b.id === pin.boardId ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select></label>
-
-        <div class="attach">
-          <strong>DESIGN.md</strong>: attach the file DESIGN.md Inspector generated for this site, and its full token set will be included in your prompt.
-          <div class="row">
-            ${pin.designMd ? `<span class="tag">${esc(pin.designMd.name)} · ${Math.ceil(pin.designMd.text.length / 1024)} KB</span><button class="btn" data-act="detach">Remove</button>` : '<button class="btn" data-act="attach">Attach .md file</button>'}
-            <input type="file" accept=".md,.markdown,text/markdown,text/plain" hidden>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="btn danger" data-act="delete">Delete</button>
-          <span class="spacer"></span>
-          <button class="btn" data-close>Cancel</button>
-          <button class="btn primary" data-act="save">Save changes</button>
-        </div>
-
-        <div class="sections">
-          ${colorsSection(a.palette)}
-          ${typographySection(a.fonts, a.typeScale)}
-          ${pin.kind === 'element' ? section('Section styles', `${Object.keys(a.keyStyles || {}).length} properties`, kvTable(a.keyStyles)) : ''}
-          ${section('Radius, shadow & motion', `${(a.radii?.length || 0) + (a.shadows?.length || 0) + (a.transitions?.length || 0)} tokens`, kvTable({ radius: (a.radii || []).join('  ·  '), shadow: (a.shadows || [])[0], motion: (a.transitions || [])[0], spacing: (a.spacing || []).join('  ·  ') }))}
-          ${section('CSS variables', `${Object.keys(a.cssVars || {}).length} tokens`, kvTable(a.cssVars), false)}
-          ${a.html ? section('HTML structure', `${Math.ceil(a.html.length / 1024)} KB`, `<pre>${esc(a.html)}</pre>`, false) : ''}
-        </div>
+      <div class="detail-main">
+        <div class="tabs detail-tabs" role="tablist">${tabs.map(([k, label]) => `<button role="tab" data-tab="${k}" aria-selected="${k === tab}">${label}</button>`).join('')}</div>
+        <div class="tab-panel">${{ details: detailsTab, section: sectionTab, system: systemTab, md: designMdTab }[tab](pin)}</div>
       </div>
     </div>`;
 
   dlg.onclick = async (e) => {
     if (e.target === dlg || e.target.closest('[data-close]')) return dlg.close();
+    const t = e.target.closest('[data-tab]');
+    if (t) return openDetail(id, t.dataset.tab);
     const copy = e.target.closest('[data-copy]')?.dataset.copy;
     if (copy) {
       await navigator.clipboard.writeText(copy);
@@ -363,12 +483,17 @@ function openDetail(id) {
     if (act === 'detach') {
       await db.savePin({ ...pin, designMd: null });
       await load();
-      openDetail(id);
+      openDetail(id, tab);
     }
     if (act === 'delete') {
       dlg.close();
       await removePins([id]);
     }
+    if (act === 'copy-md') {
+      await navigator.clipboard.writeText($('.md-output', dlg).value);
+      toast('Copied DESIGN.md');
+    }
+    if (act === 'download-md') download(`${slug(pin.hostname, 40)}.DESIGN.md`, $('.md-output', dlg).value, 'text/markdown');
     if (act === 'save') {
       await db.savePin({
         ...pin,
@@ -384,14 +509,26 @@ function openDetail(id) {
     }
   };
 
-  $('input[type=file]', dlg).onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    await db.savePin({ ...pin, designMd: { name: file.name, text: await file.text() } });
-    await load();
-    openDetail(id);
-    toast(`Attached ${file.name}`);
+  // Delete key removes the reference (unless you're typing in a field).
+  dlg.onkeydown = (e) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !e.target.closest('input, textarea, select')) {
+      e.preventDefault();
+      dlg.close();
+      removePins([id]);
+    }
   };
+
+  const file = $('input[type=file]', dlg);
+  if (file) {
+    file.onchange = async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      await db.savePin({ ...pin, designMd: { name: f.name, text: await f.text() } });
+      await load();
+      openDetail(id, tab);
+      toast(`Attached ${f.name}`);
+    };
+  }
 
   if (!dlg.open) dlg.showModal();
 }
@@ -407,13 +544,14 @@ function openGenerator(pins) {
     <div class="modal-head">
       <div class="heading">
         <img class="logo" src="../../icons/logo.svg" alt="">
-        <div><h2>Generate prompt</h2><p>Turn ${pins.length} reference${pins.length === 1 ? '' : 's'} into PROMPT.md and DESIGN.md for Claude Code.</p></div>
+        <div><h2>Generate for Claude Code</h2><p>Turn ${pins.length} reference${pins.length === 1 ? '' : 's'} into a prompt, a design system and tokens.</p></div>
       </div>
       <button class="close" data-close aria-label="Close">×</button>
     </div>
     <div class="modal-body">
       <div class="gen-options">
         <label class="field project"><span>Project name</span><input class="input" name="project" placeholder="e.g. Acme dashboard"></label>
+        <label class="check-label"><input type="checkbox" name="site" checked> Include each site's design system</label>
         <label class="check-label"><input type="checkbox" name="html"> Include HTML structure</label>
         <label class="check-label"><input type="checkbox" name="designmd" ${hasDesignMd ? 'checked' : 'disabled'}> Include attached DESIGN.md files</label>
       </div>
@@ -421,6 +559,7 @@ function openGenerator(pins) {
         <div class="tabs" role="tablist">
           <button role="tab" data-tab="prompt" aria-selected="true">PROMPT.md</button>
           <button role="tab" data-tab="design" aria-selected="false">DESIGN.md</button>
+          <button role="tab" data-tab="tokens" aria-selected="false">tokens.css</button>
         </div>
         <div class="tab-tools">
           <button class="icon-btn" data-act="copy" title="Copy">${ICONS.copy}</button>
@@ -436,18 +575,22 @@ function openGenerator(pins) {
           <button class="btn" data-act="copy">${ICONS.copy} Copy</button>
           <button class="btn" data-act="md">${ICONS.download} Download .md</button>
         </div>
-        <p>${hasImages ? 'The ZIP has PROMPT.md, DESIGN.md and the screenshots in <code>refs/</code>. ' : ''}Unzip it into your project, then tell Claude Code: <code>Read refboard/PROMPT.md and follow it.</code></p>
+        <p>The ZIP has <code>refboard/</code> (PROMPT.md, DESIGN.md, tokens.css, a full DESIGN.md per site in <code>sites/</code>${hasImages ? ', screenshots in <code>refs/</code>' : ''}) and a Claude Code skill in <code>.claude/skills/</code>. Unzip it into your project root, then tell Claude Code: <code>Read refboard/PROMPT.md and follow it.</code> The skill makes Claude use these references automatically in later sessions.</p>
       </div>
     </div>`;
 
   const opts = () => ({
     project: $('[name=project]', dlg).value,
     includeHtml: $('[name=html]', dlg).checked,
+    includeSite: $('[name=site]', dlg).checked,
     includeDesignMd: $('[name=designmd]', dlg).checked,
   });
   const output = $('.output', dlg);
   const refresh = () => {
-    output.value = tab === 'prompt' ? buildPrompt(pins, opts()) : buildDesignMd(pins, opts());
+    const o = opts();
+    if (tab === 'prompt') output.value = buildPrompt(pins, o);
+    else if (tab === 'design') output.value = buildDesignMd(pins, o);
+    else output.value = bundleFiles(pins, o).find((f) => f.name.endsWith('tokens.css')).data;
   };
 
   dlg.oninput = refresh;
@@ -464,14 +607,10 @@ function openGenerator(pins) {
       await navigator.clipboard.writeText(output.value);
       toast(hasImages && tab === 'prompt' ? 'Copied (screenshots are only in the ZIP)' : 'Copied');
     }
-    if (act === 'md') download(tab === 'prompt' ? 'PROMPT.md' : 'DESIGN.md', output.value, 'text/markdown');
+    if (act === 'md') download({ prompt: 'PROMPT.md', design: 'DESIGN.md', tokens: 'tokens.css' }[tab], output.value, tab === 'tokens' ? 'text/css' : 'text/markdown');
     if (act === 'zip') {
       const o = opts();
-      const zip = createZip([
-        { name: 'refboard/PROMPT.md', data: buildPrompt(pins, o) },
-        { name: 'refboard/DESIGN.md', data: buildDesignMd(pins, o) },
-        ...imageFiles(pins).map((f) => ({ name: `refboard/${f.name}`, data: dataUrlToBytes(f.dataUrl) })),
-      ]);
+      const zip = createZip(bundleFiles(pins, o).map((f) => ({ name: f.name, data: f.dataUrl ? dataUrlToBytes(f.dataUrl) : f.data })));
       download(`refboard-${(o.project || 'references').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.zip`, zip, 'application/zip');
     }
   };

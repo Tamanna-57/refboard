@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Refboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Save website references with notes, then turn them into design prompts and DESIGN.md files for Claude Code.",
   "action": {
     "default_popup": "src/popup/popup.html",

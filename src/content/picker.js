@@ -21,11 +21,20 @@
       [hidden] { display: none !important; }
       * { box-sizing: border-box; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
       .overlay { position: fixed; inset: 0; pointer-events: auto; cursor: crosshair; background: transparent; }
-      .box { position: fixed; border: 2px solid #0a0a0a; outline: 1px solid #fff; background: rgba(10, 10, 10, 0.08);
-             border-radius: 3px; pointer-events: none; display: none; }
-      .box.drawing { border-style: dashed; background: rgba(10, 10, 10, 0.12); }
-      .label { position: fixed; background: #0a0a0a; color: #fff; font-size: 11px; padding: 3px 7px; border-radius: 4px;
-               pointer-events: none; white-space: nowrap; display: none; font-family: ui-monospace, Menlo, Consolas, monospace; }
+      /* The box glides between targets; everything outside it is dimmed. */
+      .box { position: fixed; top: 0; left: 0; border: 2px solid #fff; border-radius: 6px; pointer-events: none; display: none;
+             box-shadow: 0 0 0 1.5px #0a0a0a, 0 0 0 100vmax rgba(10, 10, 10, 0.32);
+             will-change: transform, width, height;
+             transition: transform 160ms cubic-bezier(.2, .8, .2, 1), width 160ms cubic-bezier(.2, .8, .2, 1),
+                         height 160ms cubic-bezier(.2, .8, .2, 1), border-radius 160ms ease, opacity 120ms ease; }
+      .box.instant, .box.drawing { transition: none; }
+      .box.drawing { border-style: dashed; }
+      .label { position: fixed; top: 0; left: 0; display: none; align-items: center; gap: 6px; pointer-events: none; white-space: nowrap;
+               background: #0a0a0a; color: #fff; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;
+               box-shadow: 0 4px 14px rgba(0,0,0,.25); will-change: transform;
+               transition: transform 160ms cubic-bezier(.2, .8, .2, 1); }
+      .label.instant { transition: none; }
+      .label small { font: 500 11px ui-monospace, Menlo, Consolas, monospace; color: #a3a3a3; }
       .hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #0a0a0a; color: #fff; white-space: nowrap;
               font-size: 13px; padding: 9px 8px 9px 16px; border-radius: 999px; box-shadow: 0 8px 24px rgba(0,0,0,.25);
               pointer-events: none; display: flex; align-items: center; gap: 10px; opacity: .94; }
@@ -125,27 +134,111 @@
     return null;
   }
 
-  function showBox(r, text, drawing = false) {
+  let boxVisible = false;
+
+  function showBox(r, name, detail = '', drawing = false) {
+    // First appearance snaps into place; after that, the box glides.
+    const instant = !boxVisible || drawing;
+    box.classList.toggle('instant', instant);
+    label.classList.toggle('instant', instant);
     box.classList.toggle('drawing', drawing);
-    Object.assign(box.style, { display: 'block', top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
-    label.textContent = text;
-    label.style.display = 'block';
-    label.style.top = (r.top > 28 ? r.top - 24 : Math.min(r.top + r.height + 6, innerHeight - 24)) + 'px';
-    label.style.left = Math.min(Math.max(r.left, 4), innerWidth - 200) + 'px';
+    box.style.display = 'block';
+    box.style.transform = `translate3d(${Math.round(r.left)}px, ${Math.round(r.top)}px, 0)`;
+    box.style.width = Math.max(2, Math.round(r.width)) + 'px';
+    box.style.height = Math.max(2, Math.round(r.height)) + 'px';
+    label.innerHTML = '';
+    label.append(name);
+    if (detail) {
+      const small = document.createElement('small');
+      small.textContent = detail;
+      label.append(small);
+    }
+    label.style.display = 'flex';
+    const lw = label.offsetWidth || 160;
+    const top = r.top > 34 ? r.top - 30 : Math.min(r.top + r.height + 8, innerHeight - 30);
+    const left = Math.min(Math.max(r.left, 6), innerWidth - lw - 6);
+    label.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+    boxVisible = true;
+  }
+
+  function hideBox() {
+    box.style.display = label.style.display = 'none';
+    boxVisible = false;
+  }
+
+  const FRIENDLY = {
+    nav: 'Navigation', header: 'Header', footer: 'Footer', section: 'Section', article: 'Article', aside: 'Sidebar', main: 'Main',
+    form: 'Form', button: 'Button', img: 'Image', picture: 'Image', video: 'Video', canvas: 'Canvas', svg: 'Graphic',
+    h1: 'Heading 1', h2: 'Heading 2', h3: 'Heading 3', h4: 'Heading 4', h5: 'Heading 5', h6: 'Heading 6',
+    p: 'Text', ul: 'List', ol: 'List', li: 'List item', input: 'Input', textarea: 'Text area', select: 'Select',
+    table: 'Table', label: 'Label', figure: 'Figure', blockquote: 'Quote', dialog: 'Dialog',
+  };
+
+  function friendlyName(el) {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'a') {
+      const s = getComputedStyle(el);
+      return parseFloat(s.paddingLeft) >= 8 && (s.backgroundColor !== 'rgba(0, 0, 0, 0)' || parseFloat(s.borderTopWidth) > 0) ? 'Button' : 'Link';
+    }
+    if (FRIENDLY[tag]) return FRIENDLY[tag];
+    const cs = getComputedStyle(el);
+    const filled = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || cs.boxShadow !== 'none' || parseFloat(cs.borderTopWidth) > 0;
+    if (parseFloat(cs.borderTopLeftRadius) >= 6 && filled) return 'Card';
+    const d = cs.display;
+    if (d.includes('grid')) return 'Grid';
+    if (d.includes('flex')) return 'Group';
+    return 'Block';
   }
 
   function describe(el) {
-    let text = el.tagName.toLowerCase();
-    if (el.id) text += '#' + el.id;
-    const cls = [...el.classList].slice(0, 2).join('.');
-    if (cls) text += '.' + cls;
+    let sel = el.tagName.toLowerCase();
+    const cls = [...el.classList].filter((c) => c.length < 24).slice(0, 1).join('.');
+    if (cls) sel += '.' + cls;
     const r = el.getBoundingClientRect();
-    return `${text.slice(0, 48)}  ${Math.round(r.width)}×${Math.round(r.height)}`;
+    return [friendlyName(el), `${Math.round(r.width)}×${Math.round(r.height)} · ${sel}`];
   }
 
-  function highlight(el) {
+  // Skip what nobody means to pick: letter spans, inline formatting, SVG parts, specks.
+  const KEEP_INLINE = /^(A|BUTTON|IMG|INPUT|SELECT|TEXTAREA|LABEL|VIDEO|CANVAS|svg|PICTURE)$/;
+  function meaningful(el) {
+    let cur = el;
+    for (let i = 0; i < 8 && cur && cur !== document.body; i++) {
+      if (cur instanceof SVGElement && cur.tagName.toLowerCase() !== 'svg') {
+        cur = cur.ownerSVGElement || cur.parentElement;
+        continue;
+      }
+      const r = cur.getBoundingClientRect();
+      const inline = getComputedStyle(cur).display === 'inline' && !KEEP_INLINE.test(cur.tagName);
+      if (inline || r.width < 20 || r.height < 12) {
+        cur = cur.parentElement;
+        continue;
+      }
+      break;
+    }
+    return cur || el;
+  }
+
+  const sameBox = (a, b) => Math.abs(a.left - b.left) < 2 && Math.abs(a.top - b.top) < 2 && Math.abs(a.width - b.width) < 2 && Math.abs(a.height - b.height) < 2;
+
+  // ↑ goes to the next ancestor that is actually bigger (skips identical wrappers).
+  function biggerParent(el) {
+    const r = el.getBoundingClientRect();
+    let p = el.parentElement;
+    while (p && p !== document.documentElement && p.parentElement && p !== document.body && sameBox(p.getBoundingClientRect(), r)) p = p.parentElement;
+    return p && p !== document.documentElement ? p : null;
+  }
+
+  // A few pixels of breathing room so the outline never covers the content.
+  const PAD = 4;
+  function highlight(el, instant = false) {
     current = el;
-    showBox(el.getBoundingClientRect(), describe(el));
+    const [name, detail] = describe(el);
+    if (instant) boxVisible = false;
+    const r = el.getBoundingClientRect();
+    // Follow the element's own corner radius, so the outline hugs its shape.
+    const radius = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, Math.min(r.width, r.height) / 2);
+    box.style.borderRadius = `${Math.round(radius + PAD)}px`;
+    showBox({ left: r.left - PAD, top: r.top - PAD, width: r.width + PAD * 2, height: r.height + PAD * 2 }, name, detail);
   }
 
   function dragRect(e) {
@@ -160,7 +253,8 @@
       if (!drag.drawing && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > DRAG_THRESHOLD) drag.drawing = true;
       if (drag.drawing) {
         const r = dragRect(e);
-        showBox(r, `${Math.round(r.width)}×${Math.round(r.height)}`, true);
+        box.style.borderRadius = '4px';
+        showBox(r, 'Area', `${Math.round(r.width)}×${Math.round(r.height)}`, true);
       }
       return;
     }
@@ -169,7 +263,8 @@
       frame = 0;
       if (lockedAt && Math.hypot(lastPoint.x - lockedAt.x, lastPoint.y - lockedAt.y) < 24) return;
       lockedAt = null;
-      const el = elementAt(lastPoint.x, lastPoint.y);
+      const hit = elementAt(lastPoint.x, lastPoint.y);
+      const el = hit && meaningful(hit);
       if (el && el !== current) {
         trail.length = 0;
         highlight(el);
@@ -196,8 +291,9 @@
   // Keep the highlight glued to the element while the page scrolls.
   function onScroll() {
     if (!picking || drag) return;
-    const el = lockedAt ? current : elementAt(lastPoint.x, lastPoint.y);
-    if (el) highlight(el);
+    const hit = lockedAt ? current : elementAt(lastPoint.x, lastPoint.y);
+    const el = hit && (lockedAt ? hit : meaningful(hit));
+    if (el) highlight(el, true); // follow the page exactly while scrolling, no glide
   }
 
   function onKey(e) {
@@ -209,11 +305,11 @@
     if (e.key === 'Escape') {
       e.preventDefault();
       cleanup();
-    } else if (e.key === 'ArrowUp' && current?.parentElement && current.parentElement !== document.documentElement) {
+    } else if (e.key === 'ArrowUp' && current && biggerParent(current)) {
       e.preventDefault();
       trail.push(current);
       lockedAt = lastPoint;
-      highlight(current.parentElement);
+      highlight(biggerParent(current));
     } else if (e.key === 'ArrowDown' && trail.length) {
       e.preventDefault();
       lockedAt = lastPoint;
@@ -232,14 +328,15 @@
     trail.length = 0;
     overlay.hidden = false;
     hint.hidden = false;
-    const el = elementAt(lastPoint.x, lastPoint.y);
+    const hit = elementAt(lastPoint.x, lastPoint.y);
+    const el = hit && meaningful(hit);
     if (el) highlight(el);
   }
 
   function stopPicking() {
     picking = false;
     overlay.hidden = true;
-    box.style.display = label.style.display = 'none';
+    hideBox();
     hint.hidden = true;
   }
 
@@ -262,7 +359,8 @@
     return el;
   }
 
-  async function capture(data, r) {
+  // Screenshot first (so it shows exactly what was selected), then measure.
+  async function capture(r, measure) {
     stopPicking(); // hide our UI so it is not in the screenshot
     await nextFrame();
     const shot = await send({
@@ -271,22 +369,25 @@
       viewport: { width: innerWidth, height: innerHeight },
     });
     if (shot === null) return; // extension was reloaded; notice already shown
-    showPanel(data, shot);
+    showPanel(measure(), shot);
   }
 
   function pickElement(el) {
-    capture(window.__refboardAnalyze.element(el), el.getBoundingClientRect());
+    capture(el.getBoundingClientRect(), () => window.__refboardAnalyze.element(el));
   }
 
   function pickRegion(r) {
-    const data = window.__refboardAnalyze.element(containerFor(r));
-    data.analysis.size = { width: Math.round(r.width), height: Math.round(r.height) };
-    data.analysis.region = true;
-    // Title from the text inside the box, not from the (often much bigger) container.
+    const container = containerFor(r);
     const inner = elementAt(r.left + r.width / 2, r.top + r.height / 2);
-    const text = (inner?.closest('section, article, li, div') || inner)?.innerText?.trim().split('\n')[0] || '';
-    data.title = text ? `Area: ${text.slice(0, 50)}` : 'Selected area';
-    capture(data, r);
+    capture(r, () => {
+      const data = window.__refboardAnalyze.element(container);
+      data.analysis.size = { width: Math.round(r.width), height: Math.round(r.height) };
+      data.analysis.region = true;
+      // Title from the text inside the box, not from the (often much bigger) container.
+      const text = (inner?.closest('section, article, li, div') || inner)?.innerText?.trim().split('\n')[0] || '';
+      data.title = text ? `Area: ${text.slice(0, 50)}` : 'Selected area';
+      return data;
+    });
   }
 
   async function showPanel(data, shot) {
