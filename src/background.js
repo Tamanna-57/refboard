@@ -68,7 +68,21 @@ async function injectAnalyzer(tabId) {
   await chrome.scripting.executeScript({ target: { tabId }, files: ['src/content/analyze.js'] });
 }
 
+// After the extension is reloaded or updated, tabs that were already open keep
+// the old version's globals and leftover UI, which blocked the new picker from
+// starting. Clear all of that before every injection.
+function resetPage() {
+  try {
+    window.__refboardTeardown?.();
+  } catch {}
+  document.querySelectorAll('refboard-picker').forEach((n) => n.remove());
+  window.__refboardPickerActive = false;
+  delete window.__refboardTeardown;
+  delete window.__refboardAnalyze;
+}
+
 async function startPicker(tabId) {
+  await chrome.scripting.executeScript({ target: { tabId }, func: resetPage });
   await injectAnalyzer(tabId);
   await chrome.scripting.executeScript({ target: { tabId }, files: ['src/content/picker.js'] });
 }
