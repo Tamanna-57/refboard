@@ -2,8 +2,6 @@
 // page) and turns them into a compact summary: palette, fonts, type scale,
 // radii, shadows, spacing, motion, CSS variables and a trimmed HTML snippet.
 (() => {
-  if (window.__refboardAnalyze) return;
-
   const MAX_NODES = 1500;
 
   function toHex(value) {

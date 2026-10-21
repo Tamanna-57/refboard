@@ -76,6 +76,30 @@
   `;
   document.documentElement.appendChild(host);
 
+  // If the extension was reloaded while this page stayed open, this script's
+  // connection to it is gone. Say so instead of failing silently.
+  async function send(msg) {
+    try {
+      return await chrome.runtime.sendMessage(msg);
+    } catch (err) {
+      if (/context invalidated|Receiving end does not exist/i.test(String(err))) {
+        showNotice('Refboard was updated. Refresh this page (F5) and try again.');
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  function showNotice(text) {
+    shadow.querySelectorAll('.panel').forEach((n) => n.remove());
+    const n = document.createElement('div');
+    n.className = 'panel';
+    n.innerHTML = `<div class="head">${LOGO}<h2>Refboard</h2><button class="x" title="Close">×</button></div><div class="done"><p></p></div>`;
+    n.querySelector('p').textContent = text;
+    n.querySelector('.x').onclick = cleanup;
+    shadow.appendChild(n);
+  }
+
   const $s = (sel) => shadow.querySelector(sel);
   const overlay = $s('.overlay');
   const box = $s('.box');
@@ -221,6 +245,7 @@
 
   function cleanup() {
     picking = false;
+    delete window.__refboardTeardown;
     window.removeEventListener('keydown', onKey, true);
     window.removeEventListener('scroll', onScroll, true);
     host.remove();
@@ -240,11 +265,12 @@
   async function capture(data, r) {
     stopPicking(); // hide our UI so it is not in the screenshot
     await nextFrame();
-    const shot = await chrome.runtime.sendMessage({
+    const shot = await send({
       type: 'captureRect',
       rect: { x: r.left, y: r.top, width: r.width, height: r.height },
       viewport: { width: innerWidth, height: innerHeight },
     });
+    if (shot === null) return; // extension was reloaded; notice already shown
     showPanel(data, shot);
   }
 
@@ -264,7 +290,7 @@
   }
 
   async function showPanel(data, shot) {
-    const { boards = [], lastBoardId } = (await chrome.runtime.sendMessage({ type: 'getBoards' })) || {};
+    const { boards = [], lastBoardId } = (await send({ type: 'getBoards' })) || {};
     const panel = document.createElement('div');
     panel.className = 'panel';
     panel.innerHTML = `
@@ -338,7 +364,7 @@
       const btn = $('[data-act="save"]');
       btn.disabled = true;
       btn.textContent = 'Saving…';
-      const res = await chrome.runtime.sendMessage({
+      const res = await send({
         type: 'savePin',
         pin: {
           ...data,
@@ -382,7 +408,7 @@
     };
     panel.querySelector('[data-act="undo"]').onclick = async () => {
       clearTimeout(timer);
-      await chrome.runtime.sendMessage({ type: 'deletePin', id });
+      await send({ type: 'deletePin', id });
       panel.querySelector('.done').innerHTML = '<p>Removed. Nothing was saved.</p>';
       setTimeout(cleanup, 1200);
     };
@@ -399,5 +425,6 @@
   overlay.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', onKey, true);
   window.addEventListener('scroll', onScroll, true);
+  window.__refboardTeardown = cleanup; // lets a newer injection remove this one
   startPicking();
 })();
