@@ -187,3 +187,33 @@ body.selecting .card .trash { display: none; }
   .detail .shot { position: static; }
   .use-row { grid-template-columns: 1fr; }
 }
+
+/* Detail: header tools, tabs, system previews */
+.head-tools { display: flex; align-items: center; gap: 4px; }
+.icon-btn.danger:hover { color: var(--danger); background: #fdecec; }
+.detail-main { min-width: 0; }
+.detail-tabs { margin-bottom: 0; flex-wrap: wrap; }
+.detail-tabs button { font-size: 14px; padding: 9px 16px; }
+.tab-panel { background: var(--surface); border-top: 1px solid var(--border); padding-top: 16px; }
+.tab-panel .sections, .tab-panel > .section + .section { margin-top: 12px; }
+.tab-panel > .section { margin-bottom: 12px; }
+.summary { margin: 0 0 14px; font-size: 14px; color: var(--text-2); line-height: 1.55; }
+.notice { margin: 0 0 14px; padding: 12px 14px; border-radius: 10px; background: #fff8e6; color: #6b4e00; font-size: 13px; }
+.color-row em { font: 11.5px var(--mono); color: var(--text-3); font-style: normal; }
+.cmp { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cmp:last-child { border-bottom: 0; }
+.cmp > details { flex: 1; min-width: 160px; }
+.cmp > details summary { margin: 0; font-size: 12px; color: var(--text-3); }
+.cmp-inline { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+.cmp-card { display: flex; flex-direction: column; gap: 4px; width: 200px; font-size: 13px; }
+.cmp-card span { color: var(--text-2); }
+.cmp-input { width: 200px; pointer-events: none; }
+.shadow-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; }
+.shadow-row i { width: 56px; height: 40px; border-radius: 8px; background: var(--surface); flex: none; }
+.shadow-row b { display: block; font: 600 12.5px var(--mono); }
+.shadow-row code { font: 11.5px var(--mono); color: var(--text-2); word-break: break-all; }
+.md-tools { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; font-size: 12.5px; color: var(--text-3); }
+.md-tools span { flex: 1; }
+.md-output { height: 58vh; border-radius: 10px; }
+.detail .actions { margin-top: 18px; }
+.card .sysline { margin-top: 8px; font: 11px var(--mono); color: var(--text-3); }

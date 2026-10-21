@@ -1,6 +1,8 @@
 // Turns a set of saved pins into (1) a prompt for Claude Code and (2) a
 // DESIGN.md file. Pure functions, no browser APIs, so they can be unit tested.
 
+import { siteOf, compactSystem, buildSiteDesignMd, buildTokensCss, buildSkillMd } from './design-md.js';
+
 const MAX_COLORS = 16;
 const MAX_VARS_PER_PIN = 30;
 
@@ -70,9 +72,10 @@ function mergeColors(pins) {
     const total = palette.reduce((sum, c) => sum + c.weight, 0) || 1;
     for (const c of palette) {
       const key = c.hex.toLowerCase();
-      const e = map.get(key) || { hex: key, weight: 0, roles: new Set(), sources: new Set() };
+      const e = map.get(key) || { hex: key, weight: 0, roles: new Set(), sources: new Set(), votes: new Map() };
       e.weight += c.weight / total;
       c.roles.forEach((r) => e.roles.add(r));
+      if (c.role) e.votes.set(c.role, (e.votes.get(c.role) || 0) + c.weight / total);
       e.sources.add(pin.hostname);
       map.set(key, e);
     }
@@ -82,10 +85,12 @@ function mergeColors(pins) {
     .slice(0, MAX_COLORS)
     .map((c) => ({ ...c, roles: [...c.roles], sources: [...c.sources] }));
   const counters = {};
-  return colors.map((c) => {
-    const role = colorRole(c);
-    counters[role] = (counters[role] || 0) + 1;
-    return { ...c, role, token: `--color-${role}-${counters[role]}` };
+  return colors.map(({ votes, ...c }) => {
+    // Semantic role measured on the page (Primary, Text Primary…) when we have one.
+    const role = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0] || colorRole(c);
+    const base = role.toLowerCase().replace(/\s+/g, '-');
+    counters[base] = (counters[base] || 0) + 1;
+    return { ...c, role, token: `--color-${base}${counters[base] > 1 ? `-${counters[base]}` : ''}` };
   });
 }
 
@@ -93,7 +98,7 @@ function mergeFonts(pins) {
   const families = new Map();
   for (const pin of pins) {
     for (const f of pin.analysis?.fonts || []) {
-      const e = families.get(f.family) || { family: f.family, stack: f.stack, weights: new Set(), sources: new Set(), count: 0 };
+      const e = families.get(f.family) || { family: f.family, stack: f.stack, weights: new Set(), sources: new Set(), count: 0, usage: f.usage || [] };
       f.weights.forEach((w) => e.weights.add(w));
       e.sources.add(pin.hostname);
       e.count += f.count;
@@ -102,7 +107,7 @@ function mergeFonts(pins) {
   }
   return [...families.values()]
     .sort((a, b) => b.count - a.count)
-    .slice(0, 4)
+    .slice(0, 5)
     .map((f) => ({ ...f, weights: [...f.weights].sort(), sources: [...f.sources] }));
 }
 
@@ -114,7 +119,7 @@ function mergeTypeScale(pins) {
       if (!map.has(key)) map.set(key, { ...t, source: pin.hostname });
     }
   }
-  return [...map.values()].sort((a, b) => parseFloat(b.size) - parseFloat(a.size)).slice(0, 10);
+  return [...map.values()].sort((a, b) => parseFloat(b.size) - parseFloat(a.size)).slice(0, 12);
 }
 
 function mergeList(pins, field, limit) {
@@ -157,14 +162,14 @@ function colorsTable(colors) {
 function fontsTable(fonts) {
   return table(
     ['Family', 'Weights', 'Full stack', 'Source'],
-    fonts.map((f) => [f.family, f.weights.join(', '), `\`${f.stack}\``, f.sources.join(', ')]),
+    fonts.map((f) => [`${f.family}${f.usage?.length ? ` (${f.usage.join(', ')})` : ''}`, f.weights.join(', '), `\`${f.stack}\``, f.sources.join(', ')]),
   );
 }
 
 function typeScaleTable(scale) {
   return table(
-    ['Size', 'Weight', 'Line height', 'Letter spacing', 'Family', 'Used on', 'Source'],
-    scale.map((t) => [t.size, t.weight, t.lineHeight, t.letterSpacing, t.family, t.tags.join(', '), t.source]),
+    ['Token', 'Size', 'Weight', 'Line height', 'Letter spacing', 'Family', 'Used on', 'Source'],
+    scale.map((t) => [t.name ? `\`${t.name}\`` : '', t.size, t.weight, t.lineHeight, t.letterSpacing, t.family, (t.tags || []).join(', '), t.source]),
   );
 }
 
@@ -217,6 +222,15 @@ function referenceSection(pin, index, opts) {
   if (vars.length) {
     lines.push('<details><summary>CSS variables defined by the site</summary>', '', '```css', ':root {', ...vars.map(([k, v]) => `  ${k}: ${v};`), '}', '```', '</details>', '');
   }
+  const sys = siteOf(pin);
+  if (opts.includeSite !== false && sys?.colors) {
+    const firstOfSite = opts.pins?.findIndex((p) => p.hostname === pin.hostname && siteOf(p)?.colors);
+    if (firstOfSite === undefined || firstOfSite === index) {
+      lines.push(`**Design system of ${pin.hostname}** (full file: \`sites/${slug(pin.hostname, 40)}.DESIGN.md\`):`, '', compactSystem(sys), '');
+    } else {
+      lines.push(`**Design system:** same site as reference ${firstOfSite + 1}.`, '');
+    }
+  }
   if (opts.includeHtml && a.html) {
     lines.push('<details><summary>HTML structure (trimmed)</summary>', '', '```html', a.html, '```', '</details>', '');
   }
@@ -239,7 +253,7 @@ export function buildPrompt(pins, opts = {}) {
     '',
     '## References',
     '',
-    ...pins.map((p, i) => referenceSection(p, i, opts)),
+    ...pins.map((p, i) => referenceSection(p, i, { ...opts, pins })),
     '## Consolidated design tokens',
     '',
     'Merged from the references above. For each group, references I tagged with that focus take priority.',
@@ -248,7 +262,7 @@ export function buildPrompt(pins, opts = {}) {
     '## What to do',
     '',
     hasImages ? '1. Look at every screenshot in `refs/` next to its note before writing code.' : '1. Read every reference and its note before writing code.',
-    '2. If this project already has a design system or tokens (CSS variables, Tailwind theme, theme file), map these values onto it instead of creating a parallel set. Otherwise, propose tokens from the consolidated list.',
+    '2. If this project already has a design system or tokens (CSS variables, Tailwind theme, theme file), map these values onto it instead of creating a parallel set. Otherwise, start from `tokens.css` and the consolidated list.',
     '3. Build each referenced pattern as a reusable, accessible component that matches my note: the intent, not a pixel copy.',
     '4. Where references disagree, follow the one I tagged for that focus (for example, colors come from the reference tagged Color).',
     '5. Before coding, reply with a short plan: the tokens you will add, the components you will build, and any questions.',
@@ -287,6 +301,31 @@ export function buildDesignMd(pins, opts = {}) {
   }
   out.push('## References', '', ...pins.map((p, i) => `${i + 1}. [${p.title}](${p.url})${p.image ? `: \`${imagePath(p, i)}\`` : ''}`), '');
   return out.join('\n');
+}
+
+export function siteFileName(pin) {
+  return `sites/${slug(pin.hostname, 40)}.DESIGN.md`;
+}
+
+// Everything that goes in the ZIP, as [{ name, data }] (data is text or a data: URL).
+export function bundleFiles(pins, opts = {}) {
+  const root = 'refboard/';
+  const tokens = consolidate(pins);
+  const files = [
+    { name: root + 'PROMPT.md', data: buildPrompt(pins, opts) },
+    { name: root + 'DESIGN.md', data: buildDesignMd(pins, opts) },
+    { name: root + 'tokens.css', data: buildTokensCss(tokens, pins) },
+  ];
+  const seen = new Set();
+  for (const pin of pins) {
+    if (!siteOf(pin)?.colors || seen.has(pin.hostname)) continue;
+    seen.add(pin.hostname);
+    files.push({ name: root + siteFileName(pin), data: buildSiteDesignMd(pin, opts) });
+  }
+  for (const f of imageFiles(pins)) files.push({ name: root + f.name, dataUrl: f.dataUrl });
+  const skillDir = (opts.project || 'project').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
+  files.push({ name: `.claude/skills/${skillDir}-design-references/SKILL.md`, data: buildSkillMd(pins, tokens, opts) });
+  return files;
 }
 
 export function imageFiles(pins) {

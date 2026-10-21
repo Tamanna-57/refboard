@@ -1,0 +1,590 @@
+{
+ "colors": [
+  {
+   "hex": "#b6fe00",
+   "role": "Primary",
+   "usage": {
+    "text": 8,
+    "background": 25,
+    "border": 0
+   },
+   "weight": 784480,
+   "tags": [
+    "header",
+    "a",
+    "section",
+    "button"
+   ],
+   "token": "--color-primary"
+  },
+  {
+   "hex": "#754402",
+   "role": "Accent",
+   "usage": {
+    "text": 9,
+    "background": 0,
+    "border": 0
+   },
+   "weight": 24727,
+   "tags": [
+    "span",
+    "p"
+   ],
+   "token": "--color-accent"
+  },
+  {
+   "hex": "#f4f3ef",
+   "role": "Background",
+   "usage": {
+    "text": 0,
+    "background": 60,
+    "border": 0
+   },
+   "weight": 1826190,
+   "tags": [
+    "body"
+   ],
+   "token": "--color-background"
+  },
+  {
+   "hex": "#ffffff",
+   "role": "Surface",
+   "usage": {
+    "text": 3,
+    "background": 9,
+    "border": 0
+   },
+   "weight": 272770,
+   "tags": [
+    "div",
+    "span",
+    "input"
+   ],
+   "token": "--color-surface"
+  },
+  {
+   "hex": "#013900",
+   "role": "Text Primary",
+   "usage": {
+    "text": 40,
+    "background": 6,
+    "border": 5
+   },
+   "weight": 273273,
+   "tags": [
+    "strong",
+    "a",
+    "h1",
+    "p",
+    "h2"
+   ],
+   "token": "--color-text-primary"
+  },
+  {
+   "hex": "#3f5a3e",
+   "role": "Text Secondary",
+   "usage": {
+    "text": 34,
+    "background": 0,
+    "border": 0
+   },
+   "weight": 76800,
+   "tags": [
+    "p"
+   ],
+   "token": "--color-text-secondary"
+  },
+  {
+   "hex": "#e3e8e0",
+   "role": "Text Light",
+   "usage": {
+    "text": 5,
+    "background": 0,
+    "border": 0
+   },
+   "weight": 11200,
+   "tags": [
+    "footer"
+   ],
+   "token": "--color-text-light"
+  }
+ ],
+ "typography": {
+  "families": [
+   {
+    "family": "Arial",
+    "stack": "Arial, sans-serif",
+    "weights": [
+     "400",
+     "700"
+    ],
+    "share": 69,
+    "usage": [
+     "body",
+     "ui"
+    ]
+   },
+   {
+    "family": "Impact",
+    "stack": "Impact, sans-serif",
+    "weights": [
+     "700",
+     "800"
+    ],
+    "share": 16,
+    "usage": [
+     "display",
+     "ui"
+    ]
+   },
+   {
+    "family": "Comic Sans MS",
+    "stack": "\"Comic Sans MS\", cursive",
+    "weights": [
+     "400"
+    ],
+    "share": 9,
+    "usage": [
+     "body"
+    ]
+   },
+   {
+    "family": "Georgia",
+    "stack": "Georgia, serif",
+    "weights": [
+     "700"
+    ],
+    "share": 5,
+    "usage": [
+     "display"
+    ]
+   }
+  ],
+  "scale": [
+   {
+    "name": "text-xs",
+    "size": "12px",
+    "weights": [
+     "700"
+    ],
+    "families": [
+     "Arial"
+    ],
+    "lineHeight": "normal",
+    "letterSpacing": "normal",
+    "transform": null,
+    "usedOn": [
+     "span"
+    ],
+    "share": 3
+   },
+   {
+    "name": "text-sm",
+    "size": "14px",
+    "weights": [
+     "400",
+     "700"
+    ],
+    "families": [
+     "Arial"
+    ],
+    "lineHeight": "normal",
+    "letterSpacing": "normal",
+    "transform": "uppercase",
+    "usedOn": [
+     "footer",
+     "a"
+    ],
+    "share": 13
+   },
+   {
+    "name": "text-base",
+    "size": "16px",
+    "weights": [
+     "400",
+     "700"
+    ],
+    "families": [
+     "Arial",
+     "Impact"
+    ],
+    "lineHeight": "25.6px",
+    "letterSpacing": "normal",
+    "transform": "uppercase",
+    "usedOn": [
+     "p",
+     "a",
+     "button"
+    ],
+    "share": 45
+   },
+   {
+    "name": "text-lg",
+    "size": "18px",
+    "weights": [
+     "400"
+    ],
+    "families": [
+     "Comic Sans MS"
+    ],
+    "lineHeight": "normal",
+    "letterSpacing": "normal",
+    "transform": null,
+    "usedOn": [
+     "p"
+    ],
+    "share": 9
+   },
+   {
+    "name": "text-xl",
+    "size": "20px",
+    "weights": [
+     "400"
+    ],
+    "families": [
+     "Arial"
+    ],
+    "lineHeight": "30px",
+    "letterSpacing": "normal",
+    "transform": null,
+    "usedOn": [
+     "p"
+    ],
+    "share": 19
+   },
+   {
+    "name": "text-2xl",
+    "size": "24px",
+    "weights": [
+     "700"
+    ],
+    "families": [
+     "Georgia"
+    ],
+    "lineHeight": "normal",
+    "letterSpacing": "normal",
+    "transform": null,
+    "usedOn": [
+     "h3"
+    ],
+    "share": 5
+   },
+   {
+    "name": "text-3xl",
+    "size": "28px",
+    "weights": [
+     "800"
+    ],
+    "families": [
+     "Impact"
+    ],
+    "lineHeight": "normal",
+    "letterSpacing": "normal",
+    "transform": null,
+    "usedOn": [
+     "strong"
+    ],
+    "share": 1
+   },
+   {
+    "name": "text-4xl",
+    "size": "56px",
+    "weights": [
+     "800"
+    ],
+    "families": [
+     "Impact"
+    ],
+    "lineHeight": "normal",
+    "letterSpacing": "normal",
+    "transform": null,
+    "usedOn": [
+     "h2"
+    ],
+    "share": 2
+   },
+   {
+    "name": "text-5xl",
+    "size": "160px",
+    "weights": [
+     "800"
+    ],
+    "families": [
+     "Impact"
+    ],
+    "lineHeight": "144px",
+    "letterSpacing": "-2px",
+    "transform": "uppercase",
+    "usedOn": [
+     "h1"
+    ],
+    "share": 2
+   }
+  ],
+  "weights": [
+   "400",
+   "700",
+   "800"
+  ],
+  "lineHeights": [
+   0.9,
+   1.5,
+   1.6
+  ],
+  "letterSpacings": [
+   "0.56px",
+   "-2px"
+  ],
+  "elements": {
+   "h1": {
+    "family": "Impact",
+    "size": "160px",
+    "weight": "800",
+    "lineHeight": "144px",
+    "letterSpacing": "-2px",
+    "transform": "uppercase",
+    "color": "#013900",
+    "sample": "STICK BY YOU"
+   },
+   "h2": {
+    "family": "Impact",
+    "size": "56px",
+    "weight": "800",
+    "lineHeight": "normal",
+    "letterSpacing": "normal",
+    "color": "#013900",
+    "sample": "Why we exist"
+   },
+   "h3": {
+    "family": "Georgia",
+    "size": "24px",
+    "weight": "700",
+    "lineHeight": "normal",
+    "letterSpacing": "normal",
+    "color": "#013900",
+    "sample": "Masking tape"
+   },
+   "p": {
+    "family": "Arial",
+    "size": "20px",
+    "weight": "400",
+    "lineHeight": "30px",
+    "letterSpacing": "normal",
+    "color": "#013900",
+    "sample": "Always ready for school projects, quick "
+   },
+   "a": {
+    "family": "Arial",
+    "size": "14px",
+    "weight": "700",
+    "lineHeight": "normal",
+    "letterSpacing": "0.56px",
+    "transform": "uppercase",
+    "color": "#013900",
+    "sample": "SHOP"
+   },
+   "button": {
+    "family": "Impact",
+    "size": "16px",
+    "weight": "700",
+    "lineHeight": "normal",
+    "letterSpacing": "normal",
+    "transform": "uppercase",
+    "color": "#b6fe00",
+    "sample": "SUBSCRIBE"
+   }
+  },
+  "textElements": 28
+ },
+ "spacing": {
+  "base": 4,
+  "scale": [
+   "4px",
+   "8px",
+   "10px",
+   "12px",
+   "16px",
+   "18px",
+   "24px",
+   "32px",
+   "48px",
+   "64px",
+   "96px"
+  ]
+ },
+ "radius": [
+  {
+   "value": "8px",
+   "count": 3,
+   "full": false
+  },
+  {
+   "value": "12px",
+   "count": 1,
+   "full": false
+  },
+  {
+   "value": "24px",
+   "count": 3,
+   "full": false
+  },
+  {
+   "value": "9999px",
+   "count": 7,
+   "full": true
+  }
+ ],
+ "shadows": [
+  {
+   "name": "shadow-sm",
+   "value": "#0139000f 0px 2px 4px 0px, #01390014 0px 12px 32px 0px",
+   "count": 3
+  }
+ ],
+ "motion": {
+  "durations": [
+   "0.2s",
+   "0.3s",
+   "4s"
+  ],
+  "easings": [
+   "cubic-bezier(0.2, 0.8, 0.2, 1)",
+   "ease"
+  ],
+  "animations": [
+   "float"
+  ]
+ },
+ "layout": {
+  "containerWidths": [
+   560,
+   1200
+  ],
+  "gridColumns": [
+   3
+  ]
+ },
+ "components": {
+  "buttons": [
+   {
+    "styles": {
+     "color": "#013900",
+     "border": "2px solid #013900",
+     "border-radius": "999px",
+     "padding": "12px 24px",
+     "font-family": "Impact",
+     "font-size": "16px",
+     "font-weight": "700",
+     "text-transform": "uppercase"
+    },
+    "count": 4,
+    "share": 57,
+    "sample": "LEARN MORE"
+   },
+   {
+    "styles": {
+     "background-color": "#013900",
+     "color": "#b6fe00",
+     "border-radius": "999px",
+     "padding": "12px 24px",
+     "font-family": "Impact",
+     "font-size": "16px",
+     "font-weight": "700",
+     "text-transform": "uppercase"
+    },
+    "count": 2,
+    "share": 29,
+    "sample": "SHOP NOW"
+   },
+   {
+    "styles": {
+     "background-color": "#013900",
+     "color": "#b6fe00",
+     "border": "2px outset #000000",
+     "border-radius": "999px",
+     "padding": "12px 24px",
+     "font-family": "Impact",
+     "font-size": "16px",
+     "font-weight": "700",
+     "text-transform": "uppercase"
+    },
+    "count": 1,
+    "share": 14,
+    "sample": "SUBSCRIBE"
+   }
+  ],
+  "links": [
+   {
+    "styles": {
+     "color": "#013900",
+     "font-weight": "700"
+    },
+    "count": 4,
+    "share": 67,
+    "sample": "SHOP"
+   }
+  ],
+  "inputs": [
+   {
+    "styles": {
+     "background-color": "#ffffff",
+     "color": "#000000",
+     "border": "2px solid #013900",
+     "border-radius": "12px",
+     "padding": "12px 16px",
+     "font-size": "16px",
+     "height": "46px"
+    },
+    "count": 1,
+    "share": 100,
+    "sample": ""
+   }
+  ],
+  "cards": [
+   {
+    "styles": {
+     "background-color": "#ffffff",
+     "border-radius": "24px",
+     "padding": "32px",
+     "box-shadow": "#0139000f 0px 2px 4px 0px, #01390014 0px 12px 32px 0px"
+    },
+    "count": 3,
+    "share": 100,
+    "sample": ""
+   }
+  ],
+  "badges": [
+   {
+    "styles": {
+     "background-color": "#754402",
+     "color": "#ffffff",
+     "border-radius": "8px",
+     "padding": "4px 10px",
+     "font-size": "12px",
+     "font-weight": "700"
+    },
+    "count": 3,
+    "share": 100,
+    "sample": "NEW"
+   }
+  ]
+ },
+ "stats": {
+  "nodesScanned": 39,
+  "textElements": 28,
+  "truncated": false,
+  "ms": 10
+ },
+ "cssVars": {
+  "--green-900": "#013900",
+  "--lime": "#b6fe00",
+  "--cream": "#f4f3ef",
+  "--brown": "#754402",
+  "--radius-pill": "999px",
+  "--space-4": "16px"
+ },
+ "breakpoints": [
+  768,
+  1280
+ ]
+}
