@@ -1,8 +1,8 @@
 # Refboard
 
-A Pinterest-style board for **website design references**, as a Chrome extension.
+A Pinterest-style board for **website design references**, as a Chrome extension, that saves everything into **real project folders** you can hand straight to Claude Code.
 
-While browsing, save a whole page or pick one section (a nav, a pricing card, a hero). Add a note about *what* you want to use from it. Later, select a few references and Refboard writes a **prompt for Claude Code** and a **DESIGN.md**, with your notes, measured styles and screenshots, so Claude knows exactly what you mean.
+While browsing, press a shortcut to save a screenshot, pick a section, or **screen-record an animation**. Refboard measures the site's design system (colors, type, spacing, components with hover/focus states, motion) and, when you click **Build**, writes a professional `DESIGN.md` and `SKILL.md` into the project folder.
 
 ## Install (developer mode)
 
@@ -11,22 +11,66 @@ While browsing, save a whole page or pick one section (a nav, a pricing card, a 
 3. Click **Load unpacked** and pick the `refboard` folder.
 4. Pin the Refboard icon to the toolbar.
 
-No build step and no dependencies. It's plain JavaScript.
+No build step and no dependencies. It's plain JavaScript. Chrome 116 or newer.
 
-## Use it
+## Set up once
+
+1. Open the board (toolbar icon → **Open board**) and click **Choose folder**. Pick (or create) a folder, e.g. `Documents/Refboard`.
+2. Click **+ New project**. It becomes a subfolder and the **active project**: every shortcut saves into it. Switch the active project any time from the popup.
+
+After a browser restart Chrome may ask you to **Reconnect folder** (one click on the board). Captures you make before that are kept in Chrome and written to the folder as soon as you reconnect.
+
+## Capture while browsing
+
+| Shortcut | What it does |
+|---|---|
+| <kbd>Ctrl+Shift+S</kbd> (<kbd>⌘+Shift+S</kbd>) | **Screenshot:** saves the visible screen instantly into the active project, plus the site's measured design system. A small toast lets you **Add note** or **Undo**. |
+| <kbd>Ctrl+Shift+E</kbd> (<kbd>⌘+Shift+E</kbd>) | **Record an area:** draw a box (or click an element) and recording starts. Press the shortcut again, or **Stop**, to finish (max 60s). Saves the video, the key frames, a contact sheet and the measured motion. |
+| <kbd>Ctrl+Shift+Y</kbd> (<kbd>⌘+Shift+Y</kbd>) | **Pick a section:** click an element or drag a box, then add a note, focus tags and project. <kbd>↑</kbd>/<kbd>↓</kbd> resize the selection, <kbd>Enter</kbd> picks, <kbd>Esc</kbd> cancels. |
+| Toolbar popup | Switch the active project, run any of the above, or save the whole page with a note. |
+| Right-click menu | The same three actions, even without shortcuts. |
+
+**Shortcuts not working?** Chrome assigns default shortcuts when the extension is installed and skips any that another extension already uses. Check or change them at `chrome://extensions/shortcuts` (or **Change shortcuts** in the popup).
+
+## The project folder
+
+```
+Refboard/                       ← the folder you chose
+  Tape Shop/                    ← one subfolder per project
+    SKILL.md                    ← Claude Code skill: what's here and how to use it
+    DESIGN.md                   ← the design system (written by Build)
+    PROMPT.md                   ← kickoff brief with your notes
+    references.md               ← every capture, its note and files
+    tokens.css · tokens.json · tailwind.theme.js
+    screenshots/                ← written the moment you capture
+    recordings/                 ← .mp4 or .webm
+    frames/<recording>/         ← key frames + contact-sheet.jpg (numbered, with timestamps)
+    sites/<site>.DESIGN.md      ← full measured system of each source site
+    refboard.json               ← lets the board be restored from the folder
+```
+
+Screenshots, recordings and frames are written as you capture. The Markdown files and tokens are written when you click **Build files** on the project's board.
+
+**Using it with Claude Code:** point Claude at the folder ("Read Tape Shop/SKILL.md and follow it"), or copy the project folder into your repo's `.claude/skills/` so Claude loads it automatically whenever it works on UI.
+
+### Why recordings come with frames and motion data
+
+Claude can't watch video files. So for every recording Refboard also saves:
+- **Key frames** (where something visibly changed) and a **contact sheet** that shows them all in one image, numbered with timestamps.
+- **Measured motion:** the browser's own animation data (CSS animations and transitions with their keyframes, duration and easing), plus how elements in the area moved and faded over time (this catches JavaScript-driven effects too), and what you did (scroll, hover, click).
+
+Refboard turns that into effects such as *"3 cards move up 40px and fade in when they scroll into view, 600ms cubic-bezier(0.2, 0.8, 0.2, 1), staggered ~120ms"*, each with a CSS starting point, in `DESIGN.md` §7.
+
+## On the board
 
 | Action | How |
 |---|---|
-| Save one section of a page | Toolbar icon → **Pick a section**, right-click the page → **Pick a section to save in Refboard**, or press <kbd>Ctrl+Shift+Y</kbd> (<kbd>⌘+Shift+Y</kbd> on Mac). Then **click** an element, or **drag** to draw a box around exactly what you want. <kbd>↑</kbd>/<kbd>↓</kbd> make a hovered selection bigger or smaller, <kbd>Enter</kbd> picks it, <kbd>Esc</kbd> cancels. |
-| Fix a mistake | In the save panel, **Re-pick** or **×** discards it. After saving, **Undo** removes it. On the board: hover a card → trash icon; open a reference → trash icon in the header (or press <kbd>Delete</kbd>); or **Select** several → **Delete**. Every delete shows **Undo**. |
-| Save a whole page | Toolbar icon → write a note → **Save whole page** |
-| Organize | Boards, focus tags (Layout, Typography, Color, Component, Animation…), free tags and search, all on the board page (**Open board**) |
-| Edit a reference | Click a card to edit its note and tags, move it to another board, view the palette, fonts, styles and HTML |
-| Generate | **Select** → click cards in the order you want → **Generate**. You can copy the prompt, download it as `.md`, or **Download ZIP** |
-
-### Keyboard shortcut not working?
-
-Chrome only applies an extension's default shortcut when it is first installed, and skips it if another extension already uses that key. (On Windows, avoid Alt+Shift combinations, because Alt+Shift switches the keyboard language.) To set or change it, open `chrome://extensions/shortcuts`, or click **Set shortcut** in the Refboard popup. The right-click menu always works.
+| Organize | Projects, focus tags (Layout, Typography, Color, Component, Animation…), free tags and search |
+| Edit a reference | Click a card: edit the note and tags, move it to another project (its files move too), see the section styles, the site's design system and its DESIGN.md. Recordings have **Motion** and **Frames** tabs. |
+| Fix a mistake | **Undo** in the toast after saving; on the board, hover a card → trash, or open it → trash in the header (or <kbd>Delete</kbd>), or **Select** several → **Delete**. Deleting also removes the files; **Undo** brings them back. |
+| Build | Open a project → **Build files**. |
+| Export ZIP | Select references (or none for all) → **Export ZIP**, for sharing without the folder. |
+| Restore | Chrome data cleared? **Restore from folder** rebuilds the board from each project's `refboard.json` and media. |
 
 ### What Refboard measures on every site
 
@@ -37,25 +81,10 @@ Each saved reference stores two layers: **this section** (what you picked) and *
 - **Spacing:** values in use, plus the base unit (4px or 8px grid) when the site follows one.
 - **Radius, elevation and motion:** radius values, shadow levels, durations, easing, keyframe animations.
 - **Layout:** container widths, grid columns and breakpoints (read from the site's media queries).
-- **Components:** button variants, inputs, cards, badges and links, with exact styles and live previews.
+- **Components:** button variants, inputs, cards, badges and links, with exact styles, live previews, and their **:hover / :focus / :active** states and transitions read from the site's CSS.
+- **Motion:** `@keyframes` the site uses and animations that are running (loops, marquees).
 - **CSS variables** defined by the site.
 - **Usage guidance for AI agents:** contrast-checked color pairings and rules such as "keep spacing on a 4px grid" or "buttons are pill-shaped, uppercase".
-
-### Using the output with Claude Code
-
-**Generate** builds a ZIP:
-
-```
-refboard/
-  PROMPT.md               ← each reference, your note, measured styles, site summary, instructions
-  DESIGN.md               ← merged design system for your project
-  tokens.css              ← ready-to-use CSS variables (colors, fonts, type scale, spacing, radius, shadows)
-  sites/<site>.DESIGN.md  ← the full design system of every site you saved from
-  refs/*.png              ← screenshots referenced by the files above
-.claude/skills/<project>-design-references/SKILL.md   ← Claude Code skill
-```
-
-Unzip it into your project root and tell Claude Code: **"Read refboard/PROMPT.md and follow it."** The skill makes Claude use these references automatically whenever it works on UI in that project later.
 
 ### Focus tags decide which reference wins
 
@@ -69,26 +98,36 @@ Refboard generates a DESIGN.md for every site itself. If you also have one from 
 
 ```
 manifest.json            Manifest V3
-src/background.js        service worker: screenshots, cropping, thumbnails, saving
-src/content/analyze.js   injected: reads computed styles and builds the summary
-src/content/picker.js    injected: hover/click picker and the in-page save panel
+src/background.js        service worker: shortcuts, active project, screenshots, recording flow, toasts
+src/offscreen/           hidden page: records the tab and writes files to the folder
+src/content/analyze.js   injected: measures the page's design system
+src/content/picker.js    injected: hover/click/drag picker (save mode and record mode)
+src/content/motion.js    injected while recording: animation data, element motion, scroll/hover/click
 src/popup/               toolbar popup
-src/board/               the board page (grid, detail view, generator)
-src/lib/db.js            IndexedDB storage
-src/lib/generate.js      builds PROMPT.md, merged DESIGN.md and the ZIP file list (pure functions)
-src/lib/design-md.js     per-site DESIGN.md, tokens.css and SKILL.md (pure functions)
-src/lib/zip.js           tiny ZIP writer
+src/board/               the board page
+src/lib/db.js            IndexedDB storage (projects, references, settings)
+src/lib/fsstore.js       writes into the chosen folder (File System Access API)
+src/lib/paths.js         file names inside a project folder
+src/lib/recorder.js      crops the tab video, picks key frames, builds the contact sheet
+src/lib/motion.js        turns motion data into effects + CSS (pure functions)
+src/lib/project-docs.js  DESIGN.md, SKILL.md, PROMPT.md, references.md, tokens (pure functions)
+src/lib/design-md.js     per-site DESIGN.md (pure functions)
+src/lib/generate.js      prompt + ZIP export (pure functions)
 test/                    unit tests: npm test (Node 20+)
-scripts/make-icons.py    regenerates icons/ (needs Pillow)
 ```
+
+## Limits
+
+- Screenshots capture what's visible on screen; scroll a tall section into view first.
+- Recording captures the current tab only (not other windows), up to 60 seconds, without sound.
+- Chrome blocks extensions on `chrome://` pages and the Chrome Web Store.
+- Font previews use the site's fonts only if they're installed on your computer; the names are always recorded.
 
 ## Roadmap
 
-- [x] Phase 1: save pages with a note, tags and boards, plus the board UI
-- [x] Phase 2: section picker with cropped screenshots and style capture
-- [x] Phase 3a: template-based prompt, DESIGN.md and ZIP export, attaching DESIGN.md files
-- [x] Full per-site design system extraction, per-site DESIGN.md, tokens.css and a Claude Code skill
-- [ ] Phase 3b: optional AI pass (Claude API, your own key) to turn rough notes into a polished brief
-- [ ] Phase 4: Supabase sync across devices
-- [ ] Phase 4: MCP server so Claude Code can read boards directly ("use my SaaS landing board")
-- [ ] Full-page (scrolling) screenshots for sections taller than the screen
+- [x] Save pages and sections with notes, tags and projects; section picker; full design-system extraction
+- [x] Project folders on disk, keyboard shortcuts, area screen recording with motion analysis
+- [x] Professional DESIGN.md, SKILL.md, tokens (CSS, JSON, Tailwind) built per project
+- [ ] Optional AI pass (Claude API, your own key) to turn rough notes into a polished brief
+- [ ] MCP server so Claude Code can read projects directly
+- [ ] Full-page (scrolling) screenshots

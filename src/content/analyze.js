@@ -53,7 +53,8 @@
         if (key === null || key === undefined || key === '') return;
         const e = map.get(key) || { value: key, count: 0, extra: {} };
         e.count += by;
-        if (extra) for (const k in extra) (e.extra[k] ||= new Set()).add(extra[k]);
+        if (extra?.el) e.el ||= extra.el; // one real element per group, for state lookups
+        if (extra) for (const k in extra) if (k !== 'el') (e.extra[k] ||= new Set()).add(extra[k]);
         map.set(key, e);
       },
       top(n = Infinity) {
@@ -188,19 +189,19 @@
         const isButtonish = tag === 'button' || el.getAttribute('role') === 'button' || (tag === 'input' && /submit|button/.test(el.type)) || tag === 'a';
         if (isButtonish && (hasBg || hasBorder) && rect.height >= 24 && rect.height <= 90 && rect.width < 420 && parseFloat(s.paddingLeft) >= 6 && text()) {
           const sig = componentStyles(s, ['background-color', 'color', 'border', 'border-radius', 'padding', 'font-family', 'font-size', 'font-weight', 'text-transform', 'letter-spacing', 'box-shadow']);
-          buttons.add(JSON.stringify(sig), 1, { sample: sampleText(el), height: Math.round(rect.height) });
+          buttons.add(JSON.stringify(sig), 1, { sample: sampleText(el), height: Math.round(rect.height), el });
         } else if (tag === 'a' && !hasBg && textLen > 0) {
-          links.add(JSON.stringify(componentStyles(s, ['color', 'font-weight', 'text-decoration-line', 'text-underline-offset'])), 1, { sample: sampleText(el) });
+          links.add(JSON.stringify(componentStyles(s, ['color', 'font-weight', 'text-decoration-line', 'text-underline-offset'])), 1, { sample: sampleText(el), el });
         }
         if ((tag === 'input' && !/hidden|checkbox|radio|submit|button|range|file|color/.test(el.type)) || tag === 'textarea' || tag === 'select') {
-          inputs.add(JSON.stringify(componentStyles(s, ['background-color', 'color', 'border', 'border-radius', 'padding', 'font-size', 'height', 'box-shadow'])), 1, { height: Math.round(rect.height) });
+          inputs.add(JSON.stringify(componentStyles(s, ['background-color', 'color', 'border', 'border-radius', 'padding', 'font-size', 'height', 'box-shadow'])), 1, { height: Math.round(rect.height), el });
         }
         if (/^(div|article|li|section|a|aside)$/.test(tag) && rect.width >= 140 && rect.width <= 720 && rect.height >= 90 && rect.height <= 900 &&
             r >= 4 && (s.boxShadow !== 'none' || hasBorder || hasBg) && text()) {
-          cards.add(JSON.stringify(componentStyles(s, ['background-color', 'border', 'border-radius', 'padding', 'box-shadow'])), 1, { sample: sampleText(el), width: Math.round(rect.width) });
+          cards.add(JSON.stringify(componentStyles(s, ['background-color', 'border', 'border-radius', 'padding', 'box-shadow'])), 1, { sample: sampleText(el), width: Math.round(rect.width), el });
         }
         if (hasBg && r >= 6 && rect.height >= 16 && rect.height <= 34 && rect.width <= 180 && !isButtonish && text()) {
-          badges.add(JSON.stringify(componentStyles(s, ['background-color', 'color', 'border-radius', 'padding', 'font-size', 'font-weight', 'text-transform'])), 1, { sample: sampleText(el) });
+          badges.add(JSON.stringify(componentStyles(s, ['background-color', 'color', 'border-radius', 'padding', 'font-size', 'font-weight', 'text-transform'])), 1, { sample: sampleText(el), el });
         }
       }
       el = walker.nextNode();
@@ -252,12 +253,79 @@
 
   function variants(c, n) {
     const total = c.top().reduce((sum, e) => sum + e.count, 0);
-    return c.top(n).map((e) => ({
-      styles: JSON.parse(e.value),
-      count: e.count,
-      share: total ? Math.round((e.count / total) * 100) : 0,
-      sample: [...(e.extra.sample || [])].find((t) => t && t.length < 32) || '',
-    }));
+    return c.top(n).map((e) => {
+      const r = e.el?.getBoundingClientRect();
+      const cs = e.el && getComputedStyle(e.el);
+      return {
+        styles: JSON.parse(e.value),
+        count: e.count,
+        share: total ? Math.round((e.count / total) * 100) : 0,
+        sample: [...(e.extra.sample || [])].find((t) => t && t.length < 32) || '',
+        size: r ? { width: Math.round(r.width), height: Math.round(r.height) } : undefined,
+        transition: cs && cs.transitionDuration !== '0s' ? hexify(cs.transition) : undefined,
+        states: e.el ? stateRules(e.el) : null,
+        selector: e.el ? selectorFor(e.el) : undefined,
+      };
+    });
+  }
+
+  /* ---------- interaction states (:hover, :focus, :active) from stylesheets ---------- */
+
+  let stateRuleCache = null;
+  function stateRuleList() {
+    if (stateRuleCache) return stateRuleCache;
+    const list = [];
+    const visit = (rules, depth = 0) => {
+      for (const r of rules || []) {
+        if (list.length > 4000) return;
+        if (r.cssRules && !r.selectorText) {
+          if (depth < 3) visit(r.cssRules, depth + 1);
+        } else if (r.selectorText && /:(hover|focus|active)/.test(r.selectorText)) list.push(r);
+      }
+    };
+    for (const sheet of document.styleSheets) {
+      try {
+        visit(sheet.cssRules);
+      } catch {
+        /* cross-origin stylesheet */
+      }
+    }
+    stateRuleCache = list;
+    setTimeout(() => (stateRuleCache = null), 5000);
+    return list;
+  }
+
+  const resolveVars = (v, el) =>
+    v.replace(/var\((--[\w-]+)(?:,\s*([^)]+))?\)/g, (m, name, fallback) => getComputedStyle(el).getPropertyValue(name).trim() || fallback || m);
+
+  function stateRules(el) {
+    const out = {};
+    for (const rule of stateRuleList()) {
+      for (const part of rule.selectorText.split(/,(?![^(]*\))/)) {
+        const m = part.match(/:(hover|focus-visible|focus|active)\b/);
+        if (!m) continue;
+        const base = part.replace(/:(hover|focus-visible|focus-within|focus|active)\b/g, '').trim() || '*';
+        let matches = false;
+        try {
+          matches = el.matches(base);
+        } catch {
+          /* selector the browser can't test */
+        }
+        if (!matches) continue;
+        const state = m[1] === 'focus-visible' ? 'focus' : m[1];
+        const decl = (out[state] ||= {});
+        // Read declarations as written: shorthands that use var() have empty longhands.
+        for (const d of rule.style.cssText.split(/;(?![^(]*\))/)) {
+          const i = d.indexOf(':');
+          if (i < 0) continue;
+          const prop = d.slice(0, i).trim();
+          const v = d.slice(i + 1).replace(/!important/, '').trim();
+          if (!prop || prop.startsWith('--') || !v || v === 'initial' || Object.keys(decl).length >= 14) continue;
+          decl[prop] = hexify(resolveVars(v, el)).slice(0, 140);
+        }
+      }
+    }
+    return Object.keys(out).length ? out : null;
   }
 
   /* ---------- colors → semantic roles ---------- */
@@ -480,7 +548,45 @@
       const v = root.getPropertyValue(name).trim();
       if (v && v.length < 120) vars[name] = v;
     }
-    return { cssVars: vars, breakpoints: [...breakpoints].filter((b) => b >= 320 && b <= 2560).sort((a, b) => a - b).slice(0, 10) };
+    // Animations running right now (loops, marquees, entrance effects still playing).
+    const running = [];
+    const usedNames = new Set();
+    for (const a of document.getAnimations().slice(0, 60)) {
+      const t = a.effect?.getComputedTiming?.() || {};
+      const target = a.effect?.target;
+      if (!target || target.closest?.('refboard-picker, refboard-toast, refboard-rec')) continue;
+      const name = a.animationName || a.transitionProperty || '';
+      if (a.animationName) usedNames.add(a.animationName);
+      if (running.length < 20) {
+        running.push({
+          type: a.constructor?.name === 'CSSTransition' ? 'transition' : 'animation',
+          name, target: selectorFor(target), duration: typeof t.duration === 'number' ? Math.round(t.duration) : null,
+          easing: a.effect.getTiming?.().easing, iterations: t.iterations === Infinity ? 'infinite' : t.iterations,
+        });
+      }
+    }
+    // @keyframes the site defines (the ones in use first), as real CSS.
+    const keyframes = [];
+    const visitKf = (rules, depth = 0) => {
+      for (const rule of rules || []) {
+        if (rule.constructor?.name === 'CSSKeyframesRule') keyframes.push({ name: rule.name, css: rule.cssText.replace(/\s+/g, ' ').slice(0, 1500), used: usedNames.has(rule.name) });
+        else if (rule.cssRules && depth < 2) visitKf(rule.cssRules, depth + 1);
+      }
+    };
+    for (const sheet of document.styleSheets) {
+      try {
+        visitKf(sheet.cssRules);
+      } catch {
+        /* cross-origin stylesheet */
+      }
+    }
+    keyframes.sort((a, b) => b.used - a.used);
+    return {
+      cssVars: vars,
+      breakpoints: [...breakpoints].filter((b) => b >= 320 && b <= 2560).sort((a, b) => a - b).slice(0, 10),
+      keyframes: keyframes.slice(0, 16),
+      runningAnimations: running,
+    };
   }
 
   /* ---------- section-level extras ---------- */

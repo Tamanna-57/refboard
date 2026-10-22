@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Refboard",
-  "version": "0.2.0",
-  "description": "Save website references with notes, then turn them into design prompts and DESIGN.md files for Claude Code.",
+  "version": "0.3.0",
+  "description": "Save website screenshots, sections and screen recordings into project folders, then build DESIGN.md and SKILL.md for Claude Code.",
   "action": {
     "default_popup": "src/popup/popup.html",
     "default_title": "Save to Refboard",
@@ -27,15 +27,31 @@
     "scripting",
     "storage",
     "unlimitedStorage",
-    "contextMenus"
+    "contextMenus",
+    "offscreen",
+    "tabCapture"
   ],
   "commands": {
+    "quick-screenshot": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Save a screenshot of the visible page to the active project"
+    },
+    "record-area": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "Record an area of the page (press again to stop)"
+    },
     "start-picker": {
       "suggested_key": {
         "default": "Ctrl+Shift+Y",
         "mac": "Command+Shift+Y"
       },
-      "description": "Pick a section of the current page to save"
+      "description": "Pick a section of the page to save"
     }
   }
 }

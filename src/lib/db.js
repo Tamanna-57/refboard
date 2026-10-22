@@ -1,10 +1,12 @@
-// IndexedDB storage shared by the background worker, popup and board page.
-// All extension pages share one origin, so they all see the same database.
+// IndexedDB storage shared by the background worker, popup, board page and the
+// offscreen document. All extension pages share one origin, so they all see the
+// same database. In the UI, a "board" is called a project: each one maps to a
+// subfolder (board.folder) inside the folder the user picked.
 
 const DB_NAME = 'refboard';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
-export const DEFAULT_BOARD = { id: 'inbox', name: 'Inbox', createdAt: 0 };
+export const DEFAULT_BOARD = { id: 'inbox', name: 'Inbox', folder: 'Inbox', createdAt: 0 };
 
 let dbPromise;
 
@@ -22,6 +24,7 @@ function open() {
         if (!db.objectStoreNames.contains('boards')) {
           db.createObjectStore('boards', { keyPath: 'id' }).put(DEFAULT_BOARD);
         }
+        if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings');
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -59,14 +62,34 @@ export function savePin(pin) {
 
 export const deletePin = (id) => tx('pins', 'readwrite', (s) => s.delete(id));
 
+// Folder-safe name for a project, unique among existing projects.
+export function folderName(name, taken = []) {
+  const base = String(name || 'Untitled').replace(/[<>:"/\\|?*\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '').slice(0, 60) || 'Untitled';
+  let folder = base;
+  for (let n = 2; taken.some((t) => t.toLowerCase() === folder.toLowerCase()); n++) folder = `${base} ${n}`;
+  return folder;
+}
+
 export async function listBoards() {
   const boards = await tx('boards', 'readonly', (s) => s.getAll());
   if (!boards.some((b) => b.id === DEFAULT_BOARD.id)) boards.unshift(DEFAULT_BOARD);
-  return boards.sort((a, b) => a.createdAt - b.createdAt);
+  // Projects created before folders existed get one from their name.
+  const taken = [];
+  for (const b of boards.sort((a, c) => a.createdAt - c.createdAt)) {
+    if (!b.folder) b.folder = folderName(b.name, taken);
+    taken.push(b.folder);
+  }
+  return boards;
+}
+
+export async function getBoard(id) {
+  return (await listBoards()).find((b) => b.id === id) || DEFAULT_BOARD;
 }
 
 export async function createBoard(name) {
+  const taken = (await listBoards()).map((b) => b.folder);
   const board = { id: uid(), name: name.trim() || 'Untitled', createdAt: Date.now() };
+  board.folder = folderName(board.name, taken);
   await tx('boards', 'readwrite', (s) => s.put(board));
   return board;
 }
@@ -82,8 +105,13 @@ export async function deleteBoard(id) {
   await tx('boards', 'readwrite', (s) => s.delete(id));
 }
 
+export const getSetting = (key) => tx('settings', 'readonly', (s) => s.get(key));
+export const setSetting = (key, value) => tx('settings', 'readwrite', (s) => s.put(value, key));
+
+// Videos are Blobs and live in the project folder, so the JSON backup skips them.
 export async function exportAll() {
-  return { app: 'refboard', version: 1, exportedAt: new Date().toISOString(), boards: await listBoards(), pins: await listPins() };
+  const pins = (await listPins()).map(({ video, ...p }) => p);
+  return { app: 'refboard', version: 2, exportedAt: new Date().toISOString(), boards: await listBoards(), pins };
 }
 
 export async function importAll(data) {
