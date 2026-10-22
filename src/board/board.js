@@ -3,6 +3,9 @@ import { CATEGORIES } from '../lib/constants.js';
 import { buildPrompt, buildDesignMd, bundleFiles, slug } from '../lib/generate.js';
 import { buildSiteDesignMd, siteOf, siteSummary } from '../lib/design-md.js';
 import { createZip, dataUrlToBytes } from '../lib/zip.js';
+import { getRoot, setRoot, folderStatus, requestAccess, syncPin, removePinFiles, writeProjectFiles, readText } from '../lib/fsstore.js';
+import { buildProjectFiles } from '../lib/project-docs.js';
+import { analyzeMotion } from '../lib/motion.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -13,6 +16,8 @@ const ICONS = {
   download: svg('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>'),
   external: svg('<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>'),
   trash: svg('<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>'),
+  folder: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>'),
+  play: svg('<path d="M8 5v14l11-7Z" fill="currentColor" stroke="none"/>'),
   archive: svg('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>'),
 };
 
@@ -25,10 +30,14 @@ const state = {
   query: '',
   selecting: false,
   selected: [], // pin ids, in the order they were clicked
+  folder: { state: 'none' },
+  activeId: db.DEFAULT_BOARD.id,
 };
 
 async function load() {
-  [state.pins, state.boards] = await Promise.all([db.listPins(), db.listBoards()]);
+  [state.pins, state.boards, state.folder] = await Promise.all([db.listPins(), db.listBoards(), folderStatus()]);
+  const { activeProjectId } = await chrome.storage.local.get('activeProjectId');
+  state.activeId = state.boards.some((b) => b.id === activeProjectId) ? activeProjectId : db.DEFAULT_BOARD.id;
   if (state.board !== 'all' && !state.boards.some((b) => b.id === state.board)) state.board = 'all';
   state.selected = state.selected.filter((id) => state.pins.some((p) => p.id === id));
   render();
@@ -46,6 +55,7 @@ function visiblePins() {
 }
 
 function render() {
+  renderFolderBox();
   renderSidebar();
   renderToolbar();
   renderGrid();
@@ -56,7 +66,7 @@ function renderSidebar() {
   for (const p of state.pins) counts.set(p.boardId, (counts.get(p.boardId) || 0) + 1);
   const items = [{ id: 'all', name: 'All references', n: state.pins.length }, ...state.boards.map((b) => ({ ...b, n: counts.get(b.id) || 0 }))];
   $('#boards').innerHTML = items
-    .map((b) => `<li><button data-board="${esc(b.id)}" aria-current="${b.id === state.board}"><span>${esc(b.name)}</span><span class="count">${b.n}</span></button></li>`)
+    .map((b) => `<li><button data-board="${esc(b.id)}" aria-current="${b.id === state.board}"><span>${esc(b.name)}${b.id === state.activeId ? ' <i class="active-dot" title="Active project: shortcuts save here"></i>' : ''}</span><span class="count">${b.n}</span></button></li>`)
     .join('');
 
   $('#category-filter').innerHTML = CATEGORIES.map(
@@ -71,10 +81,30 @@ function renderSidebar() {
     : '<span class="none">Tags you add show up here</span>';
 }
 
+// Where captures are written on disk, and whether Chrome currently lets us write there.
+function renderFolderBox() {
+  const f = state.folder;
+  const pending = state.pins.filter((p) => p.synced !== true).length;
+  const box = $('#folder-box');
+  if (f.state === 'none') {
+    box.innerHTML = `<p><b>Save to a folder</b>Pick a folder once; every project gets a subfolder with its screenshots, recordings, DESIGN.md and SKILL.md.</p><button class="btn primary" data-folder="pick">${ICONS.folder} Choose folder</button>`;
+  } else if (f.state !== 'granted') {
+    box.innerHTML = `<p><b>${ICONS.folder} ${esc(f.name)}</b>Chrome needs your OK to write here again${pending ? ` (${pending} waiting)` : ''}.</p><button class="btn primary" data-folder="reconnect">Reconnect folder</button>`;
+  } else {
+    box.innerHTML = `<p class="ok"><b>${ICONS.folder} ${esc(f.name)}</b>${pending ? `${pending} not written yet · <button class="link" data-folder="sync">Write now</button>` : 'Connected · all captures saved'}</p><button class="link small" data-folder="pick">Change folder</button>`;
+  }
+}
+
 function renderToolbar() {
   const board = state.boards.find((b) => b.id === state.board);
   $('#board-title').textContent = board ? board.name : 'All references';
+  $('#board-subtitle').innerHTML = board
+    ? `${board.id === state.activeId ? '<span class="badge-active">Active project</span>' : '<button class="link small" id="set-active">Set as active project</button>'}<span class="folder-path">${ICONS.folder} ${esc(state.folder.name ? `${state.folder.name}/` : '')}${esc(board.folder)}</span>`
+    : '';
   $('#board-actions').hidden = !board || board.id === db.DEFAULT_BOARD.id;
+  const build = $('#build');
+  build.hidden = !board;
+  build.disabled = !state.pins.some((p) => p.boardId === board?.id);
   document.body.classList.toggle('selecting', state.selecting);
   $('#select-bar').hidden = !state.selecting;
   $('#toggle-select').hidden = state.selecting;
@@ -82,7 +112,7 @@ function renderToolbar() {
   $('#delete-selected').disabled = state.selected.length === 0;
   const gen = $('#generate');
   gen.disabled = state.selecting ? state.selected.length === 0 : visiblePins().length === 0;
-  gen.textContent = state.selecting && state.selected.length ? `Generate from ${state.selected.length}` : 'Generate prompt';
+  gen.textContent = state.selecting && state.selected.length ? `Export ${state.selected.length} as ZIP` : 'Export ZIP';
 }
 
 function systemLine(p) {
@@ -94,6 +124,11 @@ function systemLine(p) {
   return `<div class="sysline">${esc(parts.join(' · '))}</div>`;
 }
 
+function motionLine(p) {
+  const m = p.motionAnalysis || analyzeMotion(p.motion);
+  return `<div class="sysline">${esc(`${m.effects.length} effect${m.effects.length === 1 ? '' : 's'} measured · ${(p.frames || []).length} key frames`)}</div>`;
+}
+
 function cardHtml(p) {
   const order = state.selected.indexOf(p.id);
   const swatches = (p.analysis?.palette || []).slice(0, 8).map((c) => `<i style="background:${esc(c.hex)}"></i>`).join('');
@@ -102,17 +137,17 @@ function cardHtml(p) {
       <span class="check">${order >= 0 ? order + 1 : ''}</span>
       <button class="trash" data-delete title="Delete">${ICONS.trash}</button>
       ${p.designMd ? '<span class="attached" title="DESIGN.md attached">DESIGN.md</span>' : ''}
-      ${p.thumb ? `<div class="thumb"><img src="${p.thumb}" alt="" loading="lazy"></div>` : ''}
+      ${p.thumb ? `<div class="thumb"><img src="${p.thumb}" alt="" loading="lazy">${p.kind === 'recording' ? `<span class="rec-badge">${ICONS.play} ${(p.duration / 1000).toFixed(1)}s</span>` : ''}</div>` : ''}
       <div class="body">
         <div class="title">${esc(p.title)}</div>
         ${p.note ? `<div class="note">${esc(p.note)}</div>` : ''}
         ${swatches ? `<div class="swatches">${swatches}</div>` : ''}
-        ${systemLine(p)}
+        ${p.kind === 'recording' ? motionLine(p) : systemLine(p)}
         ${p.categories?.length ? `<div class="cats">${p.categories.map((c) => `<span class="tag">${esc(c)}</span>`).join('')}</div>` : ''}
         <div class="meta">
           ${p.favicon ? `<img src="${esc(p.favicon)}" alt="">` : ''}
           <span>${esc(p.hostname)}</span>
-          <span class="kind">${p.kind === 'element' ? 'Section' : 'Page'}</span>
+          <span class="kind">${p.synced === false ? '<i class="unsynced" title="Not written to the folder yet"></i>' : ''}${{ element: 'Section', recording: 'Recording' }[p.kind] || 'Screenshot'}</span>
         </div>
       </div>
     </article>`;
@@ -147,13 +182,19 @@ function toast(text, action) {
 async function removePins(ids) {
   const removed = state.pins.filter((p) => ids.includes(p.id));
   if (!removed.length) return;
-  for (const p of removed) await db.deletePin(p.id);
+  for (const p of removed) {
+    await db.deletePin(p.id);
+    await removePinFiles(p).catch(() => {});
+  }
   state.selected = state.selected.filter((id) => !ids.includes(id));
   await load();
   toast(`Deleted ${removed.length === 1 ? `"${removed[0].title}"` : `${removed.length} references`}`, {
     label: 'Undo',
     run: async () => {
-      for (const p of removed) await db.savePin(p);
+      for (const p of removed) {
+        await db.savePin(p);
+        await syncPin(p.id).catch(() => {});
+      }
       await load();
     },
   });
@@ -176,16 +217,18 @@ $('#boards').onclick = (e) => {
 };
 
 $('#new-board').onclick = async () => {
-  const name = prompt('New board name');
+  const name = prompt('New project name (it becomes a folder)');
   if (!name?.trim()) return;
   const board = await db.createBoard(name);
   state.board = board.id;
+  await chrome.storage.local.set({ activeProjectId: board.id });
   await load();
+  toast(`“${board.name}” is now the active project`);
 };
 
 $('#rename-board').onclick = async () => {
   const board = state.boards.find((b) => b.id === state.board);
-  const name = prompt('Rename board', board.name);
+  const name = prompt('Rename project (the folder keeps its name)', board.name);
   if (!name?.trim()) return;
   await db.renameBoard(board, name);
   await load();
@@ -193,7 +236,7 @@ $('#rename-board').onclick = async () => {
 
 $('#delete-board').onclick = async () => {
   const board = state.boards.find((b) => b.id === state.board);
-  if (!confirm(`Delete "${board.name}"? Its references move to the Inbox.`)) return;
+  if (!confirm(`Delete "${board.name}"? Its references move to the Inbox. Files already in its folder stay on disk.`)) return;
   await db.deleteBoard(board.id);
   state.board = 'all';
   await load();
@@ -274,6 +317,128 @@ $('#import-file').onchange = async (e) => {
     alert(`Import failed: ${err.message}`);
   }
   e.target.value = '';
+};
+
+/* ---------- Folder, active project, build ---------- */
+
+// Needs a click (user gesture). Returns true when Refboard can write to the folder.
+async function ensureFolder({ pick = false } = {}) {
+  let status = await folderStatus();
+  if (pick || status.state === 'none') {
+    let handle;
+    try {
+      handle = await window.showDirectoryPicker({ id: 'refboard', mode: 'readwrite', startIn: 'documents' });
+    } catch {
+      return false; // cancelled
+    }
+    await setRoot(handle);
+    status = await folderStatus();
+  }
+  if (status.state !== 'granted') status = { state: await requestAccess() };
+  return status.state === 'granted';
+}
+
+async function syncPending() {
+  const pending = (await db.listPins()).filter((p) => p.synced !== true);
+  let n = 0;
+  for (const p of pending) if (await syncPin(p.id).catch(() => false)) n++;
+  return n;
+}
+
+$('#folder-box').onclick = async (e) => {
+  const act = e.target.closest('[data-folder]')?.dataset.folder;
+  if (!act) return;
+  if (!(await ensureFolder({ pick: act === 'pick' }))) return toast('Folder not connected');
+  toast('Writing captures to the folder…');
+  const n = await syncPending();
+  await load();
+  toast(n ? `Wrote ${n} capture${n === 1 ? '' : 's'} to ${state.folder.name}` : `Connected to ${state.folder.name}`);
+};
+
+$('.toolbar').addEventListener('click', async (e) => {
+  if (e.target.closest('#set-active')) {
+    await chrome.storage.local.set({ activeProjectId: state.board });
+    await load();
+    toast('Shortcuts now save to this project');
+  }
+});
+
+$('#build').onclick = async () => {
+  const board = state.boards.find((b) => b.id === state.board);
+  if (!board) return;
+  if (!(await ensureFolder())) return toast('Choose a folder first, or use Export ZIP');
+  const btn = $('#build');
+  btn.disabled = true;
+  btn.textContent = 'Building…';
+  try {
+    for (const p of state.pins.filter((x) => x.boardId === board.id && x.synced !== true)) await syncPin(p.id).catch(() => {});
+    const pins = (await db.listPins()).filter((p) => p.boardId === board.id);
+    const files = buildProjectFiles(board, pins);
+    const where = await writeProjectFiles(board, files);
+    await load();
+    toast(`Built ${files.length} files in ${where}`);
+  } catch (err) {
+    toast(`Build failed: ${err.message}`);
+  } finally {
+    btn.textContent = 'Build files';
+    renderToolbar();
+  }
+};
+
+// Rebuilds the board from refboard.json + media in the folder (e.g. after Chrome data was cleared).
+$('#restore').onclick = async () => {
+  if (!(await ensureFolder({ pick: !(await getRoot()) }))) return;
+  const root = await getRoot();
+  let restored = 0;
+  const fileUrl = async (dir, rel) => {
+    try {
+      let d = dir;
+      const parts = rel.split('/');
+      const name = parts.pop();
+      for (const p of parts) d = await d.getDirectoryHandle(p);
+      const file = await (await d.getFileHandle(name)).getFile();
+      return await new Promise((r) => {
+        const fr = new FileReader();
+        fr.onload = () => r(fr.result);
+        fr.readAsDataURL(file);
+      });
+    } catch {
+      return null;
+    }
+  };
+  for await (const [name, dir] of root.entries()) {
+    if (dir.kind !== 'directory') continue;
+    let data;
+    try {
+      data = JSON.parse(await readText(dir, 'refboard.json'));
+    } catch {
+      continue; // not a Refboard project folder (or never built)
+    }
+    const boards = await db.listBoards();
+    if (!boards.some((b) => b.id === data.project.id)) await db.importAll({ app: 'refboard', boards: [{ ...data.project, folder: name }], pins: [] });
+    for (const pin of data.pins) {
+      if (state.pins.some((p) => p.id === pin.id)) continue;
+      const f = pin.files || {};
+      const restoredPin = { ...pin, boardId: data.project.id, synced: true };
+      if (f.screenshot) restoredPin.image = await fileUrl(dir, f.screenshot);
+      if (f.contactSheet) restoredPin.contactSheet = await fileUrl(dir, f.contactSheet);
+      if (f.frames) restoredPin.frames = await Promise.all(f.frames.map(async (rel, i) => ({ t: pin.frameTimes?.[i] ?? 0, image: await fileUrl(dir, rel) })));
+      if (f.video) {
+        try {
+          let d = dir;
+          for (const p of f.video.split('/').slice(0, -1)) d = await d.getDirectoryHandle(p);
+          restoredPin.video = await (await d.getFileHandle(f.video.split('/').pop())).getFile();
+        } catch {
+          /* video missing */
+        }
+      }
+      restoredPin.thumb = restoredPin.image || restoredPin.contactSheet || null;
+      await db.savePin(restoredPin);
+      restored++;
+    }
+  }
+  await load();
+  toast(restored ? `Restored ${restored} reference${restored === 1 ? '' : 's'} from the folder` : 'Nothing new to restore (build a project first to create refboard.json)');
 };
 
 /* ---------- Detail dialog ---------- */
@@ -439,18 +604,46 @@ function detailsTab(pin) {
     </div>`;
 }
 
+const videoUrls = new Map();
+function videoUrl(pin) {
+  if (!videoUrls.has(pin.id)) videoUrls.set(pin.id, URL.createObjectURL(pin.video));
+  return videoUrls.get(pin.id);
+}
+
+const TRIGGER_LABEL = { scroll: 'On scroll', hover: 'On hover', click: 'On click', load: 'On load', loop: 'Loop', time: 'Timed' };
+
+function motionTab(pin) {
+  const m = pin.motionAnalysis || analyzeMotion(pin.motion);
+  const effects = m.effects
+    .map((e, i) => `
+      <div class="effect">
+        <div class="effect-head"><span class="trigger t-${esc(e.trigger.type)}">${esc(TRIGGER_LABEL[e.trigger.type] || e.trigger.type)}</span><b>${i + 1}. ${esc(e.what || e.name)}</b></div>
+        <div class="effect-meta">${esc(e.duration ? `${e.duration}ms${e.durationSource === 'measured' ? ' (measured)' : ''}` : 'follows scroll')}${e.easing ? ` · <code>${esc(e.easing)}</code>` : ''}${e.stagger ? ` · stagger ${e.stagger}ms` : ''}${e.count > 1 ? ` · ${e.count} elements` : ''}${e.iterations === 'infinite' ? ' · loops' : ''}</div>
+        <p>${esc(e.text)}</p>
+        ${e.css ? `<details><summary>CSS starting point</summary><pre>${esc(e.css)}</pre></details>` : ''}
+      </div>`)
+    .join('');
+  return `<p class="summary">${esc(m.summary)}</p>${effects || '<p class="notice">No animation was detected in the recorded area. The video and frames still show the result. Add a note describing what should happen.</p>'}
+    <p class="hint-text">Measured from the live page while recording: CSS animations and transitions are exact; JavaScript-driven motion is measured every 100ms.</p>`;
+}
+
+function framesTab(pin) {
+  const frames = (pin.frames || []).map((f, i) => `<figure><img src="${f.image}" alt=""><figcaption>${i + 1} · ${(f.t / 1000).toFixed(1)}s</figcaption></figure>`).join('');
+  return `${pin.contactSheet ? `<div class="sub">Contact sheet (what Claude looks at)</div><img class="sheet" src="${pin.contactSheet}" alt="">` : ''}<div class="sub">Key frames</div><div class="frames">${frames || '<p class="notice">No frames.</p>'}</div>`;
+}
+
 function openDetail(id, tab = 'details') {
   const pin = state.pins.find((p) => p.id === id);
   if (!pin) return;
   const dlg = $('#detail');
-  const tabs = [['details', 'Details'], pin.kind === 'element' && ['section', 'This section'], ['system', 'Design system'], ['md', 'DESIGN.md']].filter(Boolean);
+  const tabs = [['details', 'Details'], pin.kind === 'element' && ['section', 'This section'], pin.kind === 'recording' && ['motion', 'Motion'], pin.kind === 'recording' && ['frames', 'Frames'], ['system', 'Design system'], ['md', 'DESIGN.md']].filter(Boolean);
   if (!tabs.some(([k]) => k === tab)) tab = 'details';
   const date = new Date(pin.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   dlg.innerHTML = `
     <div class="modal-head">
       <div class="heading">
         <img class="logo" src="../../icons/logo.svg" alt="">
-        <div><h2>${esc(pin.title)}</h2><p>${pin.kind === 'element' ? 'Saved section' : 'Saved page'} · ${esc(pin.hostname)} · ${esc(date)}</p></div>
+        <div><h2>${esc(pin.title)}</h2><p>${{ element: 'Saved section', recording: `Recording · ${(pin.duration / 1000).toFixed(1)}s` }[pin.kind] || 'Screenshot'} · ${esc(pin.hostname)} · ${esc(date)}</p></div>
       </div>
       <div class="head-tools">
         <a class="icon-btn" href="${esc(pin.url)}" target="_blank" rel="noopener" title="Open the site">${ICONS.external}</a>
@@ -459,10 +652,10 @@ function openDetail(id, tab = 'details') {
       </div>
     </div>
     <div class="modal-body detail">
-      <div class="shot">${pin.image || pin.thumb ? `<img src="${pin.image || pin.thumb}" alt="">` : ''}</div>
+      <div class="shot">${pin.kind === 'recording' && pin.video ? `<video src="${videoUrl(pin)}" ${pin.frames?.[0] ? `poster="${pin.frames[0].image}"` : ''} controls autoplay muted loop playsinline></video>` : pin.image || pin.contactSheet || pin.thumb ? `<img src="${pin.image || pin.contactSheet || pin.thumb}" alt="">` : ''}</div>
       <div class="detail-main">
         <div class="tabs detail-tabs" role="tablist">${tabs.map(([k, label]) => `<button role="tab" data-tab="${k}" aria-selected="${k === tab}">${label}</button>`).join('')}</div>
-        <div class="tab-panel">${{ details: detailsTab, section: sectionTab, system: systemTab, md: designMdTab }[tab](pin)}</div>
+        <div class="tab-panel">${{ details: detailsTab, section: sectionTab, motion: motionTab, frames: framesTab, system: systemTab, md: designMdTab }[tab](pin)}</div>
       </div>
     </div>`;
 
@@ -495,6 +688,7 @@ function openDetail(id, tab = 'details') {
     }
     if (act === 'download-md') download(`${slug(pin.hostname, 40)}.DESIGN.md`, $('.md-output', dlg).value, 'text/markdown');
     if (act === 'save') {
+      const moved = $('[name=board]', dlg).value !== pin.boardId;
       await db.savePin({
         ...pin,
         title: $('[name=title]', dlg).value.trim() || pin.title,
@@ -504,7 +698,8 @@ function openDetail(id, tab = 'details') {
         boardId: $('[name=board]', dlg).value,
       });
       dlg.close();
-      toast('Saved');
+      if (moved) await syncPin(id).catch(() => {}); // moves its files to the new project folder
+      toast(moved ? 'Saved and moved to the other project' : 'Saved');
       await load();
     }
   };
@@ -619,9 +814,13 @@ function openGenerator(pins) {
   dlg.showModal();
 }
 
+$('#version').textContent = `Refboard v${chrome.runtime.getManifest().version}`;
+
 chrome.commands.getAll().then((cmds) => {
-  const shortcut = cmds.find((c) => c.name === 'start-picker')?.shortcut;
-  if (shortcut) $('#empty-shortcut').innerHTML = `, or press <kbd>${esc(shortcut)}</kbd>`;
+  for (const kbd of document.querySelectorAll('[data-shortcut]')) {
+    const s = cmds.find((c) => c.name === kbd.dataset.shortcut)?.shortcut;
+    kbd.textContent = s || 'not set';
+  }
 });
 
 chrome.runtime.onMessage.addListener((msg) => {

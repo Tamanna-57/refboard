@@ -4,15 +4,16 @@
    "hex": "#b6fe00",
    "role": "Primary",
    "usage": {
-    "text": 8,
-    "background": 25,
+    "text": 19,
+    "background": 24,
     "border": 0
    },
-   "weight": 784480,
+   "weight": 815280,
    "tags": [
     "header",
     "a",
     "section",
+    "span",
     "button"
    ],
    "token": "--color-primary"
@@ -21,7 +22,7 @@
    "hex": "#754402",
    "role": "Accent",
    "usage": {
-    "text": 9,
+    "text": 8,
     "background": 0,
     "border": 0
    },
@@ -37,10 +38,10 @@
    "role": "Background",
    "usage": {
     "text": 0,
-    "background": 60,
+    "background": 59,
     "border": 0
    },
-   "weight": 1826190,
+   "weight": 1906830,
    "tags": [
     "body"
    ],
@@ -51,7 +52,7 @@
    "role": "Surface",
    "usage": {
     "text": 3,
-    "background": 9,
+    "background": 8,
     "border": 0
    },
    "weight": 272770,
@@ -66,17 +67,17 @@
    "hex": "#013900",
    "role": "Text Primary",
    "usage": {
-    "text": 40,
-    "background": 6,
+    "text": 35,
+    "background": 8,
     "border": 5
    },
-   "weight": 273273,
+   "weight": 353913,
    "tags": [
     "strong",
     "a",
     "h1",
     "p",
-    "h2"
+    "div"
    ],
    "token": "--color-text-primary"
   },
@@ -84,7 +85,7 @@
    "hex": "#3f5a3e",
    "role": "Text Secondary",
    "usage": {
-    "text": 34,
+    "text": 30,
     "background": 0,
     "border": 0
    },
@@ -98,7 +99,7 @@
    "hex": "#e3e8e0",
    "role": "Text Light",
    "usage": {
-    "text": 5,
+    "text": 4,
     "background": 0,
     "border": 0
    },
@@ -118,7 +119,7 @@
      "400",
      "700"
     ],
-    "share": 69,
+    "share": 61,
     "usage": [
      "body",
      "ui"
@@ -131,9 +132,10 @@
      "700",
      "800"
     ],
-    "share": 16,
+    "share": 27,
     "usage": [
      "display",
+     "body",
      "ui"
     ]
    },
@@ -143,7 +145,7 @@
     "weights": [
      "400"
     ],
-    "share": 9,
+    "share": 8,
     "usage": [
      "body"
     ]
@@ -195,7 +197,7 @@
      "footer",
      "a"
     ],
-    "share": 13
+    "share": 11
    },
    {
     "name": "text-base",
@@ -216,7 +218,7 @@
      "a",
      "button"
     ],
-    "share": 45
+    "share": 40
    },
    {
     "name": "text-lg",
@@ -233,7 +235,7 @@
     "usedOn": [
      "p"
     ],
-    "share": 9
+    "share": 8
    },
    {
     "name": "text-xl",
@@ -250,7 +252,7 @@
     "usedOn": [
      "p"
     ],
-    "share": 19
+    "share": 16
    },
    {
     "name": "text-2xl",
@@ -282,9 +284,10 @@
     "letterSpacing": "normal",
     "transform": null,
     "usedOn": [
-     "strong"
+     "strong",
+     "span"
     ],
-    "share": 1
+    "share": 13
    },
    {
     "name": "text-4xl",
@@ -394,7 +397,7 @@
     "sample": "SUBSCRIBE"
    }
   },
-  "textElements": 28
+  "textElements": 29
  },
  "spacing": {
   "base": 4,
@@ -445,14 +448,18 @@
   "durations": [
    "0.2s",
    "0.3s",
-   "4s"
+   "0.6s",
+   "4s",
+   "8s"
   ],
   "easings": [
    "cubic-bezier(0.2, 0.8, 0.2, 1)",
-   "ease"
+   "ease",
+   "ease-out"
   ],
   "animations": [
-   "float"
+   "float",
+   "scroll-x"
   ]
  },
  "layout": {
@@ -479,7 +486,19 @@
     },
     "count": 4,
     "share": 57,
-    "sample": "LEARN MORE"
+    "sample": "LEARN MORE",
+    "size": {
+     "width": 160,
+     "height": 46
+    },
+    "transition": "transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.3s",
+    "states": {
+     "hover": {
+      "background": "#013900",
+      "color": "#b6fe00"
+     }
+    },
+    "selector": "html > body > section.hero > a.btn.btn-ghost"
    },
    {
     "styles": {
@@ -494,7 +513,19 @@
     },
     "count": 2,
     "share": 29,
-    "sample": "SHOP NOW"
+    "sample": "SHOP NOW",
+    "size": {
+     "width": 137,
+     "height": 42
+    },
+    "transition": "transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.3s",
+    "states": {
+     "hover": {
+      "background": "#024d00",
+      "transform": "translateY(-2px)"
+     }
+    },
+    "selector": "html > body > header > a.btn.btn-primary"
    },
    {
     "styles": {
@@ -510,7 +541,19 @@
     },
     "count": 1,
     "share": 14,
-    "sample": "SUBSCRIBE"
+    "sample": "SUBSCRIBE",
+    "size": {
+     "width": 146,
+     "height": 46
+    },
+    "transition": "transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.3s",
+    "states": {
+     "hover": {
+      "background": "#024d00",
+      "transform": "translateY(-2px)"
+     }
+    },
+    "selector": "body > section.section > form > button.btn.btn-primary"
    }
   ],
   "links": [
@@ -521,7 +564,13 @@
     },
     "count": 4,
     "share": 67,
-    "sample": "SHOP"
+    "sample": "SHOP",
+    "size": {
+     "width": 42,
+     "height": 16
+    },
+    "states": null,
+    "selector": "body > header > nav > a"
    }
   ],
   "inputs": [
@@ -537,7 +586,19 @@
     },
     "count": 1,
     "share": 100,
-    "sample": ""
+    "sample": "",
+    "size": {
+     "width": 243,
+     "height": 46
+    },
+    "states": {
+     "focus": {
+      "border-color": "#b6fe00",
+      "box-shadow": "#b6fe0073 0px 0px 0px 3px",
+      "outline": "none"
+     }
+    },
+    "selector": "body > section.section > form > input"
    }
   ],
   "cards": [
@@ -550,7 +611,19 @@
     },
     "count": 3,
     "share": 100,
-    "sample": ""
+    "sample": "",
+    "size": {
+     "width": 363,
+     "height": 234
+    },
+    "transition": "opacity 0.6s ease-out, transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)",
+    "states": {
+     "hover": {
+      "transform": "translateY(-6px)",
+      "box-shadow": "#0139002e 0px 20px 40px"
+     }
+    },
+    "selector": "body > section.section > div.grid > div.card.reveal"
    }
   ],
   "badges": [
@@ -565,13 +638,19 @@
     },
     "count": 3,
     "share": 100,
-    "sample": "NEW"
+    "sample": "NEW",
+    "size": {
+     "width": 48,
+     "height": 22
+    },
+    "states": null,
+    "selector": "section.section > div.grid > div.card.reveal > span.badge"
    }
   ]
  },
  "stats": {
-  "nodesScanned": 39,
-  "textElements": 28,
+  "nodesScanned": 41,
+  "textElements": 29,
   "truncated": false,
   "ms": 10
  },
@@ -586,5 +665,35 @@
  "breakpoints": [
   768,
   1280
+ ],
+ "keyframes": [
+  {
+   "name": "float",
+   "css": "@keyframes float { 50% { transform: translateY(-8px); } }",
+   "used": true
+  },
+  {
+   "name": "scroll-x",
+   "css": "@keyframes scroll-x { 0% { transform: translateX(0px); } 100% { transform: translateX(-50%); } }",
+   "used": true
+  }
+ ],
+ "runningAnimations": [
+  {
+   "type": "animation",
+   "name": "float",
+   "target": "html > body > section.hero > h1",
+   "duration": 4000,
+   "easing": "linear",
+   "iterations": "infinite"
+  },
+  {
+   "type": "animation",
+   "name": "scroll-x",
+   "target": "html > body > div.marquee > span",
+   "duration": 8000,
+   "easing": "linear",
+   "iterations": "infinite"
+  }
  ]
 }

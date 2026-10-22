@@ -7,6 +7,9 @@
 (() => {
   if (window.__refboardPickerActive) return;
   window.__refboardPickerActive = true;
+  // 'save' (default): pick and save with a note. 'record': pick the area to screen-record.
+  const MODE = window.__refboardPickerMode === 'record' ? 'record' : 'save';
+  delete window.__refboardPickerMode;
 
   const CATEGORIES = ['Layout', 'Typography', 'Color', 'Component', 'Animation', 'Interaction', 'Imagery', 'Copy'];
   const DRAG_THRESHOLD = 6;
@@ -28,6 +31,8 @@
              transition: transform 160ms cubic-bezier(.2, .8, .2, 1), width 160ms cubic-bezier(.2, .8, .2, 1),
                          height 160ms cubic-bezier(.2, .8, .2, 1), border-radius 160ms ease, opacity 120ms ease; }
       .box.instant, .box.drawing { transition: none; }
+      :host(.record) .box { border-color: #ff3b30; box-shadow: 0 0 0 1.5px #ff3b30, 0 0 0 100vmax rgba(10, 10, 10, 0.32); }
+      :host(.record) .label { background: #ff3b30; }
       .box.drawing { border-style: dashed; }
       .label { position: fixed; top: 0; left: 0; display: none; align-items: center; gap: 6px; pointer-events: none; white-space: nowrap;
                background: #0a0a0a; color: #fff; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;
@@ -79,10 +84,11 @@
     <div class="box"></div>
     <div class="label"></div>
     <div class="hint">
-      <span>Click an element or drag to draw a box · <kbd>↑</kbd><kbd>↓</kbd> bigger / smaller · <kbd>Enter</kbd> pick</span>
+      <span>${MODE === 'record' ? '<b style="color:#ff6b61">● Record:</b> click an element or drag a box around the animation' : 'Click an element or drag to draw a box'} · <kbd>↑</kbd><kbd>↓</kbd> bigger / smaller · <kbd>Enter</kbd> pick</span>
       <button type="button" data-act="exit">Cancel (Esc)</button>
     </div>
   `;
+  if (MODE === 'record') host.classList.add('record');
   document.documentElement.appendChild(host);
 
   // If the extension was reloaded while this page stayed open, this script's
@@ -372,11 +378,26 @@
     showPanel(measure(), shot);
   }
 
+  // Record mode: hand the chosen area to the background worker and get out of the way.
+  async function startRecordingArea(r, title) {
+    cleanup();
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const res = await send({
+      type: 'recordRegion',
+      rect: { x: Math.round(Math.max(0, r.left)), y: Math.round(Math.max(0, r.top)), width: Math.round(r.width), height: Math.round(r.height) },
+      viewport: { width: innerWidth, height: innerHeight },
+      title,
+    });
+    if (res && !res.ok) alert(`Refboard could not start recording: ${res.error}`);
+  }
+
   function pickElement(el) {
+    if (MODE === 'record') return startRecordingArea(el.getBoundingClientRect(), describe(el)[0]);
     capture(el.getBoundingClientRect(), () => window.__refboardAnalyze.element(el));
   }
 
   function pickRegion(r) {
+    if (MODE === 'record') return startRecordingArea(r, 'selected area');
     const container = containerFor(r);
     const inner = elementAt(r.left + r.width / 2, r.top + r.height / 2);
     capture(r, () => {

@@ -14,10 +14,12 @@
       <div><b>Refboard</b><small>Save references, generate prompts</small></div>
     </div>
 
+    <section class="folder-box" id="folder-box"></section>
+
     <nav>
-      <h3>Boards</h3>
+      <h3>Projects</h3>
       <ul id="boards"></ul>
-      <button class="link" id="new-board">+ New board</button>
+      <button class="link" id="new-board">+ New project</button>
     </nav>
 
     <section>
@@ -33,17 +35,22 @@
     <footer>
       <button class="link" id="export">Export backup</button>
       <button class="link" id="import">Import backup</button>
+      <button class="link" id="restore">Restore from folder</button>
       <input type="file" id="import-file" accept="application/json,.json" hidden>
+      <span class="version" id="version"></span>
     </footer>
   </aside>
 
   <main>
     <header class="toolbar">
       <div class="title-row">
-        <h1 id="board-title">All references</h1>
+        <div class="title-block">
+          <h1 id="board-title">All references</h1>
+          <div class="subtitle" id="board-subtitle"></div>
+        </div>
         <div class="board-actions" id="board-actions" hidden>
           <button class="btn" id="rename-board">Rename</button>
-          <button class="btn danger" id="delete-board">Delete board</button>
+          <button class="btn danger" id="delete-board">Delete project</button>
         </div>
       </div>
       <div class="controls">
@@ -55,7 +62,8 @@
           <button class="btn" id="cancel-select">Cancel</button>
         </div>
         <button class="btn" id="toggle-select">Select</button>
-        <button class="btn primary" id="generate" disabled>Generate prompt</button>
+        <button class="btn" id="generate" disabled>Export ZIP</button>
+        <button class="btn primary" id="build" hidden>Build files</button>
       </div>
     </header>
 
@@ -64,8 +72,9 @@
     <div class="empty" id="empty" hidden>
       <img class="logo" src="../../icons/logo.svg" alt="">
       <h2>No references yet</h2>
-      <p>Open any website, click the Refboard icon in the toolbar, then pick a section or save the whole page.
-        You can also right-click any page → <b>Pick a section to save in Refboard</b><span id="empty-shortcut"></span>.</p>
+      <p>While browsing, press <kbd data-shortcut="quick-screenshot">Ctrl+Shift+S</kbd> to save a screenshot,
+        <kbd data-shortcut="record-area">Ctrl+Shift+E</kbd> to record an area, or <kbd data-shortcut="start-picker">Ctrl+Shift+Y</kbd> to pick a section.
+        Everything goes into the active project. The right-click menu and the toolbar icon work too.</p>
     </div>
   </main>
 

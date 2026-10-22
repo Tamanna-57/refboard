@@ -10,42 +10,31 @@
   <header>
     <div class="brand">
       <img class="logo" src="../../icons/logo.svg" alt="">
-      <div><b>Refboard</b><small>Save this page as a reference</small></div>
+      <div><b>Refboard</b><small>Save references · <span id="version"></span></small></div>
     </div>
     <button class="btn" id="open-board">Open board</button>
   </header>
 
-  <section class="page">
-    <img id="favicon" alt="">
-    <div>
-      <div id="page-title">…</div>
-      <div id="page-host"></div>
-    </div>
+  <section class="project">
+    <label for="project">Active project</label>
+    <select class="input" id="project"></select>
+    <input class="input" id="new-project" placeholder="New project name, then Enter" hidden>
+    <div class="folder" id="folder"></div>
   </section>
 
-  <button class="btn primary big" id="pick">
-    Pick a section of this page
-    <kbd id="shortcut" hidden></kbd>
-  </button>
-  <p class="shortcut-help">
-    <span id="shortcut-text">Tip: you can also right-click any page → <b>Pick a section to save in Refboard</b>.</span>
-    <a href="#" id="set-shortcut">Set shortcut</a>
-  </p>
+  <div class="actions">
+    <button class="action primary" data-run="quick-screenshot"><span>Screenshot</span><small>Saves the visible screen instantly</small><kbd data-shortcut="quick-screenshot"></kbd></button>
+    <button class="action" data-run="record-area"><span id="record-label">Record an area</span><small id="record-hint">Draw a box, record the animation</small><kbd data-shortcut="record-area"></kbd></button>
+    <button class="action" data-run="start-picker"><span>Pick a section</span><small>Click an element or draw a box, add a note</small><kbd data-shortcut="start-picker"></kbd></button>
+  </div>
+  <p class="shortcut-help"><a href="#" id="set-shortcut">Change shortcuts</a></p>
 
-  <div class="divider"><span>or save the whole page</span></div>
+  <div class="divider"><span>or save the whole page with a note</span></div>
 
   <form id="page-form">
-    <label class="field"><span>What do you want to use from this?</span>
-      <textarea class="input" id="note" placeholder="e.g. Overall layout rhythm, big serif headings, muted beige palette"></textarea>
-    </label>
-    <div class="field"><span>Focus</span><div class="chips" id="categories"></div></div>
-    <label class="field"><span>Tags</span>
-      <input class="input" id="tags" placeholder="comma separated">
-    </label>
-    <label class="field"><span>Board</span>
-      <select class="input" id="board"></select>
-    </label>
-    <input class="input" id="new-board" placeholder="New board name" hidden>
+    <textarea class="input" id="note" placeholder="What do you want to use from this page?"></textarea>
+    <div class="chips" id="categories"></div>
+    <input class="input" id="tags" placeholder="Tags, comma separated">
     <button class="btn" id="save-page" type="submit">Save whole page</button>
   </form>
 
