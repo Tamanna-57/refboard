@@ -1,8 +1,9 @@
 // Hidden offscreen document. The service worker can't record video or use the
 // File System Access API reliably, so it hands that work to this page.
 
-import { savePin, uid } from '../lib/db.js';
+import { savePin, getPin, uid } from '../lib/db.js';
 import { syncPin, removePinFiles } from '../lib/fsstore.js';
+import { pinPaths } from '../lib/paths.js';
 import { startRecording } from '../lib/recorder.js';
 import { analyzeMotion } from '../lib/motion.js';
 
@@ -24,9 +25,14 @@ async function thumbnail(dataUrl, width = 520) {
 const handlers = {
   async recStart({ streamId, rect, viewport, meta, maxMs }) {
     if (session) throw new Error('A recording is already running.');
+    // Capture at the tab's real pixel size: tab capture scales up to whatever
+    // maximum is requested, and encoding extra pixels costs frame rate.
+    const scale = Math.min(viewport.dpr || 1, 2);
+    const width = Math.min(3840, Math.round(viewport.width * scale));
+    const height = Math.min(2160, Math.round(viewport.height * scale));
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId, maxWidth: 3840, maxHeight: 2160, maxFrameRate: 30 } },
+      video: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId, maxWidth: width, maxHeight: height, minFrameRate: 30, maxFrameRate: 60 } },
     });
     const recording = startRecording(stream, rect, viewport, {
       maxMs,
@@ -59,17 +65,37 @@ const handlers = {
       frames: result.frames,
       contactSheet: result.contactSheet,
       region: { ...rect, ...result.size },
+      videoSize: result.videoSize,
       motion,
       motionAnalysis: analysis,
     };
     await savePin(pin);
-    const synced = await syncPin(pin.id).catch(() => false);
     chrome.runtime.sendMessage({ type: 'pinsChanged' }).catch(() => {});
-    return { ok: true, id: pin.id, synced, effects: analysis.effects.length, seconds: Math.round(result.duration / 100) / 10 };
+    return { ok: true, id: pin.id, effects: analysis.effects.length, seconds: Math.round(result.duration / 100) / 10 };
   },
 
   async recActive() {
     return { active: !!session };
+  },
+
+  // The service worker can't make blob: URLs, which chrome.downloads needs for big
+  // files (data: URLs over 2MB are rejected). Make them here, one per file.
+  async blobUrls({ id }) {
+    const pin = await getPin(id);
+    if (!pin) return { urls: [] };
+    const paths = pinPaths(pin);
+    const blobOf = async (dataUrl) => (await fetch(dataUrl)).blob();
+    const urls = [];
+    if (paths.screenshot) urls.push({ rel: paths.screenshot, url: URL.createObjectURL(await blobOf(pin.image)) });
+    if (paths.video && pin.video) urls.push({ rel: paths.video, url: URL.createObjectURL(pin.video) });
+    for (let i = 0; i < (paths.frames || []).length; i++) urls.push({ rel: paths.frames[i], url: URL.createObjectURL(await blobOf(pin.frames[i].image)) });
+    if (paths.contactSheet) urls.push({ rel: paths.contactSheet, url: URL.createObjectURL(await blobOf(pin.contactSheet)) });
+    return { urls };
+  },
+
+  async revoke({ urls }) {
+    setTimeout(() => urls.forEach((u) => URL.revokeObjectURL(u)), 5000);
+    return { ok: true };
   },
 
   async syncPin({ id }) {

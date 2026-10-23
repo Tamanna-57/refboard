@@ -256,3 +256,11 @@ body.selecting .card .trash { display: none; }
 .frames figure { margin: 0; }
 .frames img { display: block; width: 100%; border-radius: 8px; border: 1px solid var(--border); }
 .frames figcaption { font: 11.5px var(--mono); color: var(--text-3); margin-top: 4px; }
+.folder-box .btn + .link { display: block; margin-top: 8px; }
+.folder-box .link.small { display: block; margin-top: 6px; }
+button.folder-path { border: 0; background: none; padding: 0; color: var(--text-3); cursor: pointer; }
+button.folder-path:hover { color: var(--text); text-decoration: underline; }
+.folder-box .btn + .link { display: block; margin-top: 8px; }
+.folder-box .link.small { display: block; margin-top: 6px; }
+button.folder-path { border: 0; background: none; padding: 0; color: var(--text-3); cursor: pointer; }
+button.folder-path:hover { color: var(--text); text-decoration: underline; }

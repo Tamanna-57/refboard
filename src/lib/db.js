@@ -108,6 +108,12 @@ export async function deleteBoard(id) {
 export const getSetting = (key) => tx('settings', 'readonly', (s) => s.get(key));
 export const setSetting = (key, value) => tx('settings', 'readwrite', (s) => s.put(value, key));
 
+// Where captures are written: 'folder' (a folder the user picked) or 'downloads'
+// (Downloads/Refboard). Anyone who already picked a folder keeps using it.
+export async function getStorageMode() {
+  return (await getSetting('storageMode')) || ((await getSetting('rootFolder')) ? 'folder' : 'downloads');
+}
+
 // Videos are Blobs and live in the project folder, so the JSON backup skips them.
 export async function exportAll() {
   const pins = (await listPins()).map(({ video, ...p }) => p);

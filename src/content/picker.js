@@ -385,7 +385,7 @@
     const res = await send({
       type: 'recordRegion',
       rect: { x: Math.round(Math.max(0, r.left)), y: Math.round(Math.max(0, r.top)), width: Math.round(r.width), height: Math.round(r.height) },
-      viewport: { width: innerWidth, height: innerHeight },
+      viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 },
       title,
     });
     if (res && !res.ok) alert(`Refboard could not start recording: ${res.error}`);
