@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Refboard",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Save website screenshots, sections and screen recordings into project folders, then build DESIGN.md and SKILL.md for Claude Code.",
   "action": {
     "default_popup": "src/popup/popup.html",
@@ -29,7 +29,9 @@
     "unlimitedStorage",
     "contextMenus",
     "offscreen",
-    "tabCapture"
+    "tabCapture",
+    "downloads",
+    "downloads.ui"
   ],
   "commands": {
     "quick-screenshot": {

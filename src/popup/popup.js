@@ -1,5 +1,6 @@
 import { CATEGORIES } from '../lib/constants.js';
 import { folderStatus } from '../lib/fsstore.js';
+import { getStorageMode } from '../lib/db.js';
 
 const $ = (sel) => document.querySelector(sel);
 const send = (msg) => chrome.runtime.sendMessage(msg);
@@ -24,13 +25,24 @@ async function renderProjects() {
   select.innerHTML = '';
   for (const b of boards) select.add(new Option(b.name, b.id, false, b.id === res.lastBoardId));
   select.add(new Option('+ New project…', '__new'));
-  const folder = await folderStatus();
   const board = boards.find((b) => b.id === res.lastBoardId);
   const el = $('#folder');
-  el.classList.toggle('warn', folder.state !== 'granted');
-  if (folder.state === 'granted') el.textContent = `📁 ${folder.name}/${board?.folder || ''}`;
-  else if (folder.state === 'none') el.innerHTML = 'Saved in Chrome only. <a href="#" data-open-board>Choose a folder</a>';
-  else el.innerHTML = `Folder needs reconnecting. <a href="#" data-open-board>Reconnect</a>`;
+  const mode = await getStorageMode();
+  const folder = await folderStatus();
+  const ok = mode !== 'folder' || folder.state === 'granted';
+  el.classList.toggle('warn', !ok);
+  const path = mode === 'folder' ? `${folder.name}/${board?.folder || ''}` : `Downloads/Refboard/${board?.folder || ''}`;
+  if (ok) {
+    el.innerHTML = '';
+    el.append(`📁 ${path} `);
+    const a = Object.assign(document.createElement('a'), { href: '#', textContent: 'Show' });
+    a.onclick = async (e) => {
+      e.preventDefault();
+      const r = await send({ type: 'showInFolder', boardId: board?.id });
+      if (r && !r.ok) status(r.error, true);
+    };
+    if (mode !== 'folder') el.append(a);
+  } else el.innerHTML = `Folder needs reconnecting. <a href="#" data-open-board>Reconnect</a>`;
 }
 
 $('#project').onchange = async () => {

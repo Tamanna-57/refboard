@@ -3,7 +3,8 @@ import { CATEGORIES } from '../lib/constants.js';
 import { buildPrompt, buildDesignMd, bundleFiles, slug } from '../lib/generate.js';
 import { buildSiteDesignMd, siteOf, siteSummary } from '../lib/design-md.js';
 import { createZip, dataUrlToBytes } from '../lib/zip.js';
-import { getRoot, setRoot, folderStatus, requestAccess, syncPin, removePinFiles, writeProjectFiles, readText } from '../lib/fsstore.js';
+import { getRoot, setRoot, folderStatus, requestAccess, writeProjectFiles, readText } from '../lib/fsstore.js';
+import { downloadFiles, downloadPath, ROOT } from '../lib/downloads.js';
 import { buildProjectFiles } from '../lib/project-docs.js';
 import { analyzeMotion } from '../lib/motion.js';
 
@@ -35,7 +36,7 @@ const state = {
 };
 
 async function load() {
-  [state.pins, state.boards, state.folder] = await Promise.all([db.listPins(), db.listBoards(), folderStatus()]);
+  [state.pins, state.boards, state.folder, state.mode] = await Promise.all([db.listPins(), db.listBoards(), folderStatus(), db.getStorageMode()]);
   const { activeProjectId } = await chrome.storage.local.get('activeProjectId');
   state.activeId = state.boards.some((b) => b.id === activeProjectId) ? activeProjectId : db.DEFAULT_BOARD.id;
   if (state.board !== 'all' && !state.boards.some((b) => b.id === state.board)) state.board = 'all';
@@ -86,12 +87,13 @@ function renderFolderBox() {
   const f = state.folder;
   const pending = state.pins.filter((p) => p.synced !== true).length;
   const box = $('#folder-box');
-  if (f.state === 'none') {
-    box.innerHTML = `<p><b>Save to a folder</b>Pick a folder once; every project gets a subfolder with its screenshots, recordings, DESIGN.md and SKILL.md.</p><button class="btn primary" data-folder="pick">${ICONS.folder} Choose folder</button>`;
-  } else if (f.state !== 'granted') {
-    box.innerHTML = `<p><b>${ICONS.folder} ${esc(f.name)}</b>Chrome needs your OK to write here again${pending ? ` (${pending} waiting)` : ''}.</p><button class="btn primary" data-folder="reconnect">Reconnect folder</button>`;
+  const pendingLine = pending ? `<br>${pending} not written yet · <button class="link" data-folder="sync">Write now</button>` : '';
+  if (state.mode !== 'folder') {
+    box.innerHTML = `<p class="ok"><b>${ICONS.folder} Downloads/${ROOT}</b>Saved automatically, one subfolder per project.${pendingLine}</p><button class="btn" data-folder="show">Show in folder</button><button class="link small" data-folder="pick">Use a different folder…</button>`;
+  } else if (f.state === 'none' || f.state === 'prompt' || f.state === 'denied') {
+    box.innerHTML = `<p><b>${ICONS.folder} ${esc(f.name || 'Your folder')}</b>Chrome needs your OK to write here again${pending ? ` (${pending} waiting)` : ''}.</p><button class="btn primary" data-folder="reconnect">Reconnect folder</button><button class="link small" data-folder="downloads">Save to Downloads/${ROOT} instead</button>`;
   } else {
-    box.innerHTML = `<p class="ok"><b>${ICONS.folder} ${esc(f.name)}</b>${pending ? `${pending} not written yet · <button class="link" data-folder="sync">Write now</button>` : 'Connected · all captures saved'}</p><button class="link small" data-folder="pick">Change folder</button>`;
+    box.innerHTML = `<p class="ok"><b>${ICONS.folder} ${esc(f.name)}</b>Connected · saved automatically${pendingLine}</p><button class="link small" data-folder="pick">Change folder</button><button class="link small" data-folder="downloads">Save to Downloads/${ROOT} instead</button>`;
   }
 }
 
@@ -99,7 +101,7 @@ function renderToolbar() {
   const board = state.boards.find((b) => b.id === state.board);
   $('#board-title').textContent = board ? board.name : 'All references';
   $('#board-subtitle').innerHTML = board
-    ? `${board.id === state.activeId ? '<span class="badge-active">Active project</span>' : '<button class="link small" id="set-active">Set as active project</button>'}<span class="folder-path">${ICONS.folder} ${esc(state.folder.name ? `${state.folder.name}/` : '')}${esc(board.folder)}</span>`
+    ? `${board.id === state.activeId ? '<span class="badge-active">Active project</span>' : '<button class="link small" id="set-active">Set as active project</button>'}<button class="folder-path" id="show-project" title="Show in folder">${ICONS.folder} ${esc(where(board))}</button>`
     : '';
   $('#board-actions').hidden = !board || board.id === db.DEFAULT_BOARD.id;
   const build = $('#build');
@@ -178,13 +180,18 @@ function toast(text, action) {
   toast.timer = setTimeout(() => (t.hidden = true), action ? 6000 : 1800);
 }
 
+// Writing media to disk happens in the background worker (downloads or the chosen folder).
+const persist = (id) => chrome.runtime.sendMessage({ type: 'persistPin', id }).then((r) => r?.synced).catch(() => false);
+const unpersist = (pin) => chrome.runtime.sendMessage({ type: 'unpersistPin', downloads: pin.downloads, files: pin.files }).catch(() => {});
+const where = (board) => (state.mode === 'folder' ? `${state.folder.name || 'your folder'}/${board.folder}` : `Downloads/${ROOT}/${board.folder}`);
+
 // Deletes right away and offers Undo, so a mistake is one click to fix.
 async function removePins(ids) {
   const removed = state.pins.filter((p) => ids.includes(p.id));
   if (!removed.length) return;
   for (const p of removed) {
     await db.deletePin(p.id);
-    await removePinFiles(p).catch(() => {});
+    await unpersist(p);
   }
   state.selected = state.selected.filter((id) => !ids.includes(id));
   await load();
@@ -192,8 +199,8 @@ async function removePins(ids) {
     label: 'Undo',
     run: async () => {
       for (const p of removed) {
-        await db.savePin(p);
-        await syncPin(p.id).catch(() => {});
+        await db.savePin({ ...p, downloads: undefined });
+        await persist(p.id);
       }
       await load();
     },
@@ -321,7 +328,7 @@ $('#import-file').onchange = async (e) => {
 
 /* ---------- Folder, active project, build ---------- */
 
-// Needs a click (user gesture). Returns true when Refboard can write to the folder.
+// Needs a click (user gesture). Returns true when Refboard can write to the chosen folder.
 async function ensureFolder({ pick = false } = {}) {
   let status = await folderStatus();
   if (pick || status.state === 'none') {
@@ -341,21 +348,33 @@ async function ensureFolder({ pick = false } = {}) {
 async function syncPending() {
   const pending = (await db.listPins()).filter((p) => p.synced !== true);
   let n = 0;
-  for (const p of pending) if (await syncPin(p.id).catch(() => false)) n++;
+  for (const p of pending) if (await persist(p.id)) n++;
   return n;
 }
 
 $('#folder-box').onclick = async (e) => {
   const act = e.target.closest('[data-folder]')?.dataset.folder;
   if (!act) return;
-  if (!(await ensureFolder({ pick: act === 'pick' }))) return toast('Folder not connected');
-  toast('Writing captures to the folder…');
+  if (act === 'show') return chrome.runtime.sendMessage({ type: 'showInFolder', boardId: state.board !== 'all' ? state.board : null });
+  if (act === 'downloads') {
+    await db.setSetting('storageMode', 'downloads');
+  } else if (act !== 'sync') {
+    if (!(await ensureFolder({ pick: act === 'pick' }))) return toast('Folder not connected');
+    await db.setSetting('storageMode', 'folder');
+  }
+  await load();
+  toast('Writing captures…');
   const n = await syncPending();
   await load();
-  toast(n ? `Wrote ${n} capture${n === 1 ? '' : 's'} to ${state.folder.name}` : `Connected to ${state.folder.name}`);
+  toast(n ? `Wrote ${n} capture${n === 1 ? '' : 's'}` : state.mode === 'folder' ? `Saving to ${state.folder.name}` : `Saving to Downloads/${ROOT}`);
 };
 
 $('.toolbar').addEventListener('click', async (e) => {
+  if (e.target.closest('#show-project')) {
+    const r = await chrome.runtime.sendMessage({ type: 'showInFolder', boardId: state.board });
+    if (r && !r.ok) toast(r.error);
+    return;
+  }
   if (e.target.closest('#set-active')) {
     await chrome.storage.local.set({ activeProjectId: state.board });
     await load();
@@ -366,17 +385,24 @@ $('.toolbar').addEventListener('click', async (e) => {
 $('#build').onclick = async () => {
   const board = state.boards.find((b) => b.id === state.board);
   if (!board) return;
-  if (!(await ensureFolder())) return toast('Choose a folder first, or use Export ZIP');
+  if (state.mode === 'folder' && !(await ensureFolder())) return toast('Reconnect the folder first, or use Export ZIP');
   const btn = $('#build');
   btn.disabled = true;
   btn.textContent = 'Building…';
   try {
-    for (const p of state.pins.filter((x) => x.boardId === board.id && x.synced !== true)) await syncPin(p.id).catch(() => {});
+    for (const p of state.pins.filter((x) => x.boardId === board.id && x.synced !== true)) await persist(p.id);
     const pins = (await db.listPins()).filter((p) => p.boardId === board.id);
     const files = buildProjectFiles(board, pins);
-    const where = await writeProjectFiles(board, files);
+    if (state.mode === 'folder') {
+      await writeProjectFiles(board, files);
+    } else {
+      const urls = files.map((f) => ({ filename: downloadPath(board.folder, f.name), url: URL.createObjectURL(new Blob([f.data], { type: f.name.endsWith('.json') ? 'application/json' : 'text/plain' })) }));
+      const ids = await downloadFiles(urls);
+      urls.forEach((u) => setTimeout(() => URL.revokeObjectURL(u.url), 5000));
+      await chrome.storage.local.set({ [`lastDownload:${board.id}`]: ids[urls[0].filename] });
+    }
     await load();
-    toast(`Built ${files.length} files in ${where}`);
+    toast(`Built ${files.length} files in ${where(board)}`, state.mode === 'folder' ? undefined : { label: 'Show in folder', run: () => chrome.runtime.sendMessage({ type: 'showInFolder', boardId: board.id }) });
   } catch (err) {
     toast(`Build failed: ${err.message}`);
   } finally {
@@ -387,8 +413,18 @@ $('#build').onclick = async () => {
 
 // Rebuilds the board from refboard.json + media in the folder (e.g. after Chrome data was cleared).
 $('#restore').onclick = async () => {
-  if (!(await ensureFolder({ pick: !(await getRoot()) }))) return;
-  const root = await getRoot();
+  let root;
+  if (state.mode === 'folder') {
+    if (!(await ensureFolder({ pick: !(await getRoot()) }))) return;
+    root = await getRoot();
+  } else {
+    toast(`Pick your Downloads/${ROOT} folder`);
+    try {
+      root = await window.showDirectoryPicker({ id: 'refboard-restore', mode: 'read', startIn: 'downloads' });
+    } catch {
+      return;
+    }
+  }
   let restored = 0;
   const fileUrl = async (dir, rel) => {
     try {
@@ -698,7 +734,7 @@ function openDetail(id, tab = 'details') {
         boardId: $('[name=board]', dlg).value,
       });
       dlg.close();
-      if (moved) await syncPin(id).catch(() => {}); // moves its files to the new project folder
+      if (moved) await persist(id); // moves its files to the new project folder
       toast(moved ? 'Saved and moved to the other project' : 'Saved');
       await load();
     }

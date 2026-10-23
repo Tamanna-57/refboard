@@ -8,7 +8,8 @@
 // window.__refboardMotion.start(rect) … .stop() → data
 (() => {
   const SAMPLE_MS = 100;
-  const MAX_ELEMENTS = 250;
+  const MAX_ELEMENTS = 160;
+  const SAMPLE_BUDGET_MS = 6; // never spend more than this per sample, so the page stays smooth
   const PROPS = ['transform', 'opacity', 'filter', 'clipPath', 'backgroundColor', 'color', 'width', 'height', 'boxShadow', 'borderRadius'];
 
   function selectorFor(el) {
@@ -77,9 +78,14 @@
       if (target && target.closest?.('refboard-picker, refboard-rec')) continue;
       if (s.animations.length < 120) s.animations.push(animationInfo(a, s.t0));
     }
-    for (const rec of s.tracked) {
-      const cs = getComputedStyle(rec.el);
-      const r = rec.el.getBoundingClientRect();
+    // Round-robin through the tracked elements within a small time budget per tick.
+    const started = performance.now();
+    const n = s.tracked.length;
+    for (let k = 0; k < n; k++) {
+      if (performance.now() - started > SAMPLE_BUDGET_MS) break;
+      const rec = s.tracked[(s.cursor + k) % n];
+      s.lastIndex = (s.cursor + k) % n;
+      const cs = rec.cs;
       for (const p of PROPS) {
         const v = cs[p];
         if (v !== rec.last[p]) {
@@ -88,15 +94,20 @@
           rec.last[p] = v;
         }
       }
-      // Position changes not caused by scrolling (e.g. parallax, sticky, layout shifts).
-      const y = Math.round(r.top + scrollY);
-      const x = Math.round(r.left + scrollX);
-      if (x !== rec.lastPos[0] || y !== rec.lastPos[1]) {
-        rec.series.position ||= [[0, `${rec.lastPos[0]},${rec.lastPos[1]}`]];
-        rec.series.position.push([t, `${x},${y}`]);
-        rec.lastPos = [x, y];
+      // Only sticky/fixed elements can move relative to the page while scrolling;
+      // reading positions is expensive, so only those are measured.
+      if (rec.pinned) {
+        const r = rec.el.getBoundingClientRect();
+        const y = Math.round(r.top + scrollY);
+        const x = Math.round(r.left + scrollX);
+        if (x !== rec.lastPos[0] || y !== rec.lastPos[1]) {
+          rec.series.position ||= [[0, `${rec.lastPos[0]},${rec.lastPos[1]}`]];
+          rec.series.position.push([t, `${x},${y}`]);
+          rec.lastPos = [x, y];
+        }
       }
     }
+    s.cursor = (s.lastIndex + 1) % Math.max(1, n);
   }
 
   function onEvent(e) {
@@ -172,18 +183,19 @@
       const score = (c) => Math.abs(Math.log((c.area + 1) / (viewportArea * 0.05))) - (c.inView ? 0.5 : 0);
       candidates.sort((a, b) => score(a) - score(b));
       const tracked = candidates.slice(0, MAX_ELEMENTS).map(({ el }) => {
-        const cs = getComputedStyle(el);
+        const cs = getComputedStyle(el); // live object: reading it later gives current values
         const r = el.getBoundingClientRect();
         const last = {};
         for (const p of PROPS) last[p] = cs[p];
         return {
-          el, last, series: {}, lastPos: [Math.round(r.left + scrollX), Math.round(r.top + scrollY)],
+          el, cs, last, series: {}, lastPos: [Math.round(r.left + scrollX), Math.round(r.top + scrollY)],
+          pinned: cs.position === 'sticky' || cs.position === 'fixed',
           info: { selector: selectorFor(el), tag: el.tagName.toLowerCase(), text: label(el), transition: cs.transition, animation: cs.animationName !== 'none' ? `${cs.animationName} ${cs.animationDuration} ${cs.animationTimingFunction}` : '' },
         };
       });
       state = {
         t0: performance.now(), startedAt: Date.now(), rect: box, viewport: { width: innerWidth, height: innerHeight }, url: location.href,
-        tracked, seenAnims: new Set(), animations: [], events: [], scroll: [],
+        tracked, seenAnims: new Set(), animations: [], events: [], scroll: [], cursor: 0, lastIndex: 0,
       };
       // Animations already running when recording starts (loops, marquees…)
       for (const a of document.getAnimations()) {

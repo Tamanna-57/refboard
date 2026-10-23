@@ -1,10 +1,14 @@
-// Records a MediaStream (a captured tab) cropped to one rectangle of the page,
-// and picks the key frames where something visibly changed. Used by the
-// offscreen document. Needs a window context (MediaStreamTrackProcessor).
+// Records a MediaStream (a captured tab) and picks key frames of one area.
+//
+// Smoothness: the video is encoded by Chrome's own MediaRecorder straight from
+// the captured track, with no JavaScript touching individual frames, so it keeps
+// the tab's real frame rate. Key frames are grabbed separately from a clone of
+// the track every 150ms, cropped to the area the user drew; that work can never
+// delay the video. Used by the offscreen document (needs a window context).
 
-const CANDIDATE_EVERY_MS = 200;
-const MAX_KEY_FRAMES = 12;
-const FRAME_WIDTH = 960;
+const GRAB_EVERY_MS = 150;
+const MAX_KEY_FRAMES = 16;
+const FRAME_WIDTH = 1280;
 
 const even = (n) => Math.max(0, Math.floor(n / 2) * 2);
 
@@ -16,11 +20,11 @@ async function blobToDataUrl(blob) {
   });
 }
 
-// 16×16 grayscale fingerprint, to measure how different two frames look.
-function fingerprint(bitmap) {
+// 16×16 grayscale fingerprint of one area of a frame, to measure how different two frames look.
+function fingerprint(bitmap, crop) {
   const c = new OffscreenCanvas(16, 16);
   const ctx = c.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(bitmap, 0, 0, 16, 16);
+  ctx.drawImage(bitmap, crop.x, crop.y, crop.width, crop.height, 0, 0, 16, 16);
   const d = ctx.getImageData(0, 0, 16, 16).data;
   const out = new Uint8Array(256);
   for (let i = 0; i < 256; i++) out[i] = (d[i * 4] * 3 + d[i * 4 + 1] * 6 + d[i * 4 + 2]) / 10;
@@ -33,11 +37,43 @@ const difference = (a, b) => {
   return sum / a.length;
 };
 
-async function toJpeg(bitmap, width = FRAME_WIDTH) {
-  const ratio = Math.min(1, width / bitmap.width);
-  const c = new OffscreenCanvas(Math.round(bitmap.width * ratio), Math.round(bitmap.height * ratio));
-  c.getContext('2d').drawImage(bitmap, 0, 0, c.width, c.height);
-  return c.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+async function cropToJpeg(bitmap, crop, width = FRAME_WIDTH) {
+  const ratio = Math.min(1, width / crop.width);
+  const c = new OffscreenCanvas(Math.round(crop.width * ratio), Math.round(crop.height * ratio));
+  c.getContext('2d').drawImage(bitmap, crop.x, crop.y, crop.width, crop.height, 0, 0, c.width, c.height);
+  return c.convertToBlob({ type: 'image/jpeg', quality: 0.88 });
+}
+
+// Grabs the latest frame of a track as an ImageBitmap (ImageCapture, or a
+// MediaStreamTrackProcessor that keeps only the newest frame).
+function frameGrabber(track) {
+  if ('ImageCapture' in self) {
+    const ic = new ImageCapture(track);
+    return { grab: () => ic.grabFrame(), close: () => track.stop() };
+  }
+  const reader = new MediaStreamTrackProcessor({ track }).readable.getReader();
+  let latest = null;
+  let open = true;
+  (async () => {
+    while (open) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      latest?.close();
+      latest = value;
+    }
+  })();
+  return {
+    grab: async () => {
+      if (!latest) throw new Error('no frame yet');
+      return createImageBitmap(latest);
+    },
+    close: () => {
+      open = false;
+      latest?.close();
+      reader.cancel().catch(() => {});
+      track.stop();
+    },
+  };
 }
 
 export function pickKeyFrames(candidates, max = MAX_KEY_FRAMES) {
@@ -78,95 +114,86 @@ export async function contactSheet(frames) {
 
 export function startRecording(stream, rect, viewport, { maxMs = 60000, onLimit } = {}) {
   const [track] = stream.getVideoTracks();
-  const processor = new MediaStreamTrackProcessor({ track });
-  const generator = new MediaStreamTrackGenerator({ kind: 'video' });
-  const reader = processor.readable.getReader();
-  const writer = generator.writable.getWriter();
-  const mime = ['video/mp4;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t));
-  const recorder = new MediaRecorder(new MediaStream([generator]), { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+  // H.264 (usually hardware-encoded) first, then VP8, which is much lighter than VP9.
+  const mime = ['video/mp4;codecs=avc1', 'video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t));
+  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 });
   const chunks = [];
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  recorder.start(1000);
+  const started = performance.now();
 
+  const grabber = frameGrabber(track.clone());
   const candidates = [];
   let crop = null;
-  let firstTs = null;
-  let lastCandidate = -Infinity;
-  let lastKept = null;
-  let stopped = false;
-  let lastT = 0;
   let size = null;
+  let videoSize = null;
+  let lastKept = null;
+  let busy = null;
+  let stopped = false;
 
-  const limit = setTimeout(() => onLimit?.(), maxMs);
-
-  const pump = (async () => {
-    while (!stopped) {
-      const { value: frame, done } = await reader.read();
-      if (done || !frame) break;
-      if (stopped) {
-        frame.close();
-        break;
-      }
-      if (!crop) {
-        const vr = frame.visibleRect || { x: 0, y: 0, width: frame.displayWidth, height: frame.displayHeight };
-        const sx = vr.width / viewport.width;
-        const sy = vr.height / viewport.height;
-        const x = even(vr.x + Math.max(0, rect.x) * sx);
-        const y = even(vr.y + Math.max(0, rect.y) * sy);
-        const w = even(Math.min(vr.x + vr.width - x, Math.min(rect.width, viewport.width - Math.max(0, rect.x)) * sx));
-        const h = even(Math.min(vr.y + vr.height - y, Math.min(rect.height, viewport.height - Math.max(0, rect.y)) * sy));
-        crop = { x, y, width: Math.max(2, w), height: Math.max(2, h) };
-        size = { width: crop.width, height: crop.height };
-      }
-      firstTs ??= frame.timestamp;
-      const t = Math.round((frame.timestamp - firstTs) / 1000);
-      lastT = t;
-      let cropped;
+  const tick = () => {
+    if (busy || stopped) return;
+    busy = (async () => {
+      const t = Math.round(performance.now() - started);
+      const bmp = await grabber.grab();
       try {
-        cropped = new VideoFrame(frame, { visibleRect: crop, displayWidth: crop.width, displayHeight: crop.height, timestamp: frame.timestamp });
-      } catch {
-        cropped = frame.clone();
-      }
-      frame.close();
-      if (t - lastCandidate >= CANDIDATE_EVERY_MS) {
-        lastCandidate = t;
-        const bmp = await createImageBitmap(cropped);
-        const fp = fingerprint(bmp);
+        if (!crop) {
+          const sx = bmp.width / viewport.width;
+          const sy = bmp.height / viewport.height;
+          const x = Math.max(0, Math.round(rect.x * sx));
+          const y = Math.max(0, Math.round(rect.y * sy));
+          crop = { x, y, width: Math.max(2, Math.min(bmp.width - x, Math.round(rect.width * sx))), height: Math.max(2, Math.min(bmp.height - y, Math.round(rect.height * sy))) };
+          size = { width: crop.width, height: crop.height };
+          videoSize = { width: bmp.width, height: bmp.height };
+        }
+        const fp = fingerprint(bmp, crop);
         const diff = lastKept ? difference(fp, lastKept.fp) : 255;
-        // Keep a frame when it looks different, or at least every second.
-        if (!lastKept || diff > 2.5 || t - lastKept.t >= 1000) {
-          const c = { t, diff, fp, blob: await toJpeg(bmp) };
+        // Keep a frame when the area looks different, or at least every 0.8s.
+        if (!lastKept || diff > 2 || t - lastKept.t >= 800) {
+          // Encode in the background so the next grab isn't delayed.
+          const c = { t, diff, fp, blob: cropToJpeg(bmp, crop).finally(() => bmp.close()) };
           candidates.push(c);
           lastKept = c;
-          if (candidates.length > 80) candidates.splice(1 + Math.floor(Math.random() * 78), 1);
-        }
+          if (candidates.length > 120) candidates.splice(1 + Math.floor(Math.random() * 118), 1);
+        } else bmp.close();
+      } catch (err) {
         bmp.close();
+        throw err;
       }
-      await writer.write(cropped);
-    }
-  })();
-
-  recorder.start(500);
+    })()
+      .catch(() => {})
+      .finally(() => (busy = null));
+  };
+  const timer = setInterval(tick, GRAB_EVERY_MS);
+  tick();
+  const limit = setTimeout(() => onLimit?.(), maxMs);
 
   return {
     mime,
     async stop() {
       clearTimeout(limit);
+      clearInterval(timer);
+      tick(); // one last frame
+      await busy;
       stopped = true;
+      const duration = Math.round(performance.now() - started);
       const done = new Promise((r) => (recorder.onstop = r));
       if (recorder.state !== 'inactive') recorder.stop();
       await done;
-      track.stop();
-      await reader.cancel().catch(() => {});
-      await pump.catch(() => {});
-      await writer.close().catch(() => {});
+      grabber.close();
+      stream.getTracks().forEach((t) => t.stop());
       const keys = pickKeyFrames(candidates);
-      const frames = await Promise.all(keys.map(async (k) => ({ t: k.t, blob: k.blob, image: await blobToDataUrl(k.blob) })));
+      const frames = await Promise.all(keys.map(async (k) => {
+        const blob = await k.blob;
+        return { t: k.t, blob, image: await blobToDataUrl(blob) };
+      }));
       const sheet = frames.length ? await contactSheet(frames) : null;
       return {
         video: new Blob(chunks, { type: mime.split(';')[0] }),
         videoType: mime.split(';')[0],
-        duration: lastT,
+        duration,
         size,
+        videoSize,
         frames: frames.map(({ t, image }) => ({ t, image })),
         contactSheet: sheet ? await blobToDataUrl(sheet) : null,
       };

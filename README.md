@@ -25,7 +25,7 @@ After a browser restart Chrome may ask you to **Reconnect folder** (one click on
 | Shortcut | What it does |
 |---|---|
 | <kbd>Ctrl+Shift+S</kbd> (<kbd>⌘+Shift+S</kbd>) | **Screenshot:** saves the visible screen instantly into the active project, plus the site's measured design system. A small toast lets you **Add note** or **Undo**. |
-| <kbd>Ctrl+Shift+E</kbd> (<kbd>⌘+Shift+E</kbd>) | **Record an area:** draw a box (or click an element) and recording starts. Press the shortcut again, or **Stop**, to finish (max 60s). Saves the video, the key frames, a contact sheet and the measured motion. |
+| <kbd>Ctrl+Shift+E</kbd> (<kbd>⌘+Shift+E</kbd>) | **Record an area:** draw a box (or click an element) and recording starts. Press the shortcut again, or **Stop**, to finish (max 60s). Saves a smooth video of the visible tab (Chrome's own encoder, at the tab's real resolution, up to 60 fps), up to 16 key frames of your area, a contact sheet and the measured motion. |
 | <kbd>Ctrl+Shift+Y</kbd> (<kbd>⌘+Shift+Y</kbd>) | **Pick a section:** click an element or drag a box, then add a note, focus tags and project. <kbd>↑</kbd>/<kbd>↓</kbd> resize the selection, <kbd>Enter</kbd> picks, <kbd>Esc</kbd> cancels. |
 | Toolbar popup | Switch the active project, run any of the above, or save the whole page with a note. |
 | Right-click menu | The same three actions, even without shortcuts. |
@@ -49,7 +49,7 @@ Refboard/                       ← the folder you chose
     refboard.json               ← lets the board be restored from the folder
 ```
 
-Screenshots, recordings and frames are written as you capture. The Markdown files and tokens are written when you click **Build files** on the project's board.
+By default files go to `Downloads/Refboard/<Project>/` with no setup (**Show in folder** on the board or popup opens it). You can pick your own folder instead on the board. Screenshots, recordings and frames are written as you capture. The Markdown files and tokens are written when you click **Build files** on the project's board.
 
 **Using it with Claude Code:** point Claude at the folder ("Read Tape Shop/SKILL.md and follow it"), or copy the project folder into your repo's `.claude/skills/` so Claude loads it automatically whenever it works on UI.
 
@@ -119,7 +119,7 @@ test/                    unit tests: npm test (Node 20+)
 ## Limits
 
 - Screenshots capture what's visible on screen; scroll a tall section into view first.
-- Recording captures the current tab only (not other windows), up to 60 seconds, without sound.
+- Recording captures the visible part of the current tab only (not other windows), up to 60 seconds, without sound. The video shows the whole visible tab; the key frames and contact sheet show the area you drew. Keep the tab in front while recording.
 - Chrome blocks extensions on `chrome://` pages and the Chrome Web Store.
 - Font previews use the site's fonts only if they're installed on your computer; the names are always recorded.
 

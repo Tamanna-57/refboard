@@ -1,4 +1,6 @@
-import { listBoards, createBoard, getBoard, getPin, savePin, deletePin, uid, DEFAULT_BOARD } from './lib/db.js';
+import { listBoards, createBoard, getBoard, getPin, savePin, deletePin, uid, getStorageMode, DEFAULT_BOARD } from './lib/db.js';
+import { downloadFiles, downloadPath, removeDownloads, showInFolder, ROOT } from './lib/downloads.js';
+import { pinPaths } from './lib/paths.js';
 
 const BOARD_URL = chrome.runtime.getURL('src/board/board.html');
 const OFFSCREEN_URL = 'src/offscreen/offscreen.html';
@@ -84,9 +86,48 @@ async function offscreen(msg) {
   return chrome.runtime.sendMessage({ ...msg, target: 'offscreen' });
 }
 
-// Mirror a pin's files into its project folder (silently queued if the folder isn't connected).
-function syncToFolder(id) {
-  offscreen({ type: 'syncPin', id }).catch(() => {});
+/* ---------- writing files to disk ---------- */
+
+// 'downloads' (default): Downloads/Refboard/<Project>/…   'folder': a folder the user picked.
+const storageMode = getStorageMode;
+
+// Writes a pin's media (screenshot / video / frames) into its project folder.
+async function persistPin(id) {
+  try {
+    const pin = await getPin(id);
+    if (!pin) return false;
+    if ((await storageMode()) === 'folder') return !!(await offscreen({ type: 'syncPin', id }))?.synced;
+    const board = await getBoard(pin.boardId);
+    if (pin.downloads && pin.files?.folder && pin.files.folder !== board.folder) await removeDownloads(pin.downloads); // moved project
+    const { urls = [] } = (await offscreen({ type: 'blobUrls', id })) || {};
+    try {
+      const ids = await downloadFiles(urls.map((u) => ({ filename: downloadPath(board.folder, u.rel), url: u.url })));
+      const fresh = await getPin(id);
+      if (!fresh) return removeDownloads(ids).then(() => false); // deleted meanwhile
+      await savePin({ ...fresh, files: { ...pinPaths(fresh), folder: board.folder }, downloads: ids, synced: true });
+      const first = Object.values(ids)[0];
+      if (first) await chrome.storage.local.set({ [`lastDownload:${board.id}`]: first, lastDownloadId: first });
+      chrome.runtime.sendMessage({ type: 'pinsChanged' }).catch(() => {});
+      return true;
+    } finally {
+      offscreen({ type: 'revoke', urls: urls.map((u) => u.url) }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('Could not write files', err);
+    const pin = await getPin(id);
+    if (pin) await savePin({ ...pin, synced: false });
+    return false;
+  }
+}
+
+async function unpersistPin({ downloads, files }) {
+  if (downloads) await removeDownloads(downloads);
+  if (files && (await storageMode()) === 'folder') await offscreen({ type: 'removePinFiles', pin: { files } }).catch(() => {});
+}
+
+async function whereSaved(board) {
+  if ((await storageMode()) === 'folder') return `your folder/${board.folder}`;
+  return `Downloads/${ROOT}/${board.folder}`;
 }
 
 /* ---------- saving ---------- */
@@ -107,7 +148,7 @@ async function storePin(input) {
   };
   await savePin(pin);
   chrome.runtime.sendMessage({ type: 'pinsChanged' }).catch(() => {});
-  syncToFolder(pin.id);
+  pin.synced = await persistPin(pin.id);
   return pin;
 }
 
@@ -151,12 +192,12 @@ async function savePage(tabId, windowId, fields) {
 async function quickScreenshot(tab) {
   const pin = await savePage(tab.id, tab.windowId, { source: 'shortcut' });
   const board = await getBoard(pin.boardId);
-  await toast(tab.id, { text: `Screenshot saved to ${board.name}`, pinId: pin.id });
+  await toast(tab.id, { text: `Screenshot saved to ${board.name}`, pinId: pin.id, sub: pin.synced ? await whereSaved(board) : 'Saved in Chrome; open the board to write it to your folder', folder: pin.synced });
 }
 
 /* ---------- on-page toast after a shortcut capture ---------- */
 
-function pageToast({ text, pinId, sub }) {
+function pageToast({ text, pinId, sub, folder }) {
   document.querySelectorAll('refboard-toast').forEach((n) => n.remove());
   const host = document.createElement('refboard-toast');
   host.style.cssText = 'all: initial; position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;';
@@ -172,10 +213,15 @@ function pageToast({ text, pinId, sub }) {
       button:hover { background: #3a3a3a; }
       input { width: 100%; margin-top: 10px; border: 1px solid #333; background: #141414; color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 13px; outline: none; }
       input:focus { border-color: #fff; }
+      .row2 { margin-top: 8px; }
+      .row2[hidden] { display: none; }
     </style>
-    <div class="t"><div class="row"><b></b><button data-a="note">Add note</button><button data-a="undo">Undo</button></div><small></small></div>`;
+    <div class="t"><div class="row"><b></b><button data-a="note">Add note</button><button data-a="undo">Undo</button></div><small></small><div class="row2"><button data-a="show">Show in folder</button></div></div>`;
   root.querySelector('b').textContent = text;
   root.querySelector('small').textContent = sub || 'Esc to dismiss';
+  root.querySelector('.row2').hidden = !folder;
+  root.querySelector('[data-a="show"]').onclick = () => chrome.runtime.sendMessage({ type: 'showInFolder', pinId });
+  if (!pinId) root.querySelectorAll('[data-a="note"], [data-a="undo"]').forEach((b) => b.remove());
   document.documentElement.appendChild(host);
   let timer = setTimeout(() => host.remove(), 6000);
   const keep = () => clearTimeout(timer);
@@ -268,14 +314,17 @@ function stopRecording() {
     } catch {
       /* tab closed or navigated away */
     }
+    await toast(rec.tabId, { text: 'Saving recording…', sub: 'Picking key frames and measuring motion' });
     const res = await offscreen({ type: 'recStop', motion });
     if (!res?.ok) return toast(rec.tabId, { text: 'Recording failed', sub: res?.error });
+    const synced = await persistPin(res.id);
     const pin = await getPin(res.id);
     const board = await getBoard(pin?.boardId);
     await toast(rec.tabId, {
       text: `Recording saved to ${board.name}`,
       pinId: res.id,
-      sub: `${res.seconds}s · ${res.effects} effect${res.effects === 1 ? '' : 's'} measured${res.synced ? ' · written to folder' : ''}`,
+      folder: synced,
+      sub: `${res.seconds}s · ${(pin?.frames || []).length} key frames · ${res.effects} effect${res.effects === 1 ? '' : 's'} measured${synced ? ` · ${await whereSaved(board)}` : ''}`,
     });
   })().finally(() => (stopping = null));
   return stopping;
@@ -309,8 +358,28 @@ const handlers = {
   async deletePin(msg) {
     const pin = await getPin(msg.id);
     await deletePin(msg.id);
-    if (pin?.files) offscreen({ type: 'removePinFiles', pin: { files: pin.files } }).catch(() => {});
+    if (pin) await unpersistPin(pin);
     chrome.runtime.sendMessage({ type: 'pinsChanged' }).catch(() => {});
+    return { ok: true };
+  },
+  async persistPin(msg) {
+    return { ok: true, synced: await persistPin(msg.id) };
+  },
+  async unpersistPin(msg) {
+    await unpersistPin(msg);
+    return { ok: true };
+  },
+  async showInFolder(msg) {
+    if ((await storageMode()) === 'folder') return { ok: false, error: 'Open the folder you chose in File Explorer / Finder.' };
+    let id;
+    if (msg.pinId) {
+      const pin = await getPin(msg.pinId);
+      const ids = pin?.downloads || {};
+      id = Object.entries(ids).find(([k]) => /contact-sheet|screenshots\//.test(k))?.[1] ?? Object.values(ids)[0];
+    }
+    if (!id && msg.boardId) id = (await chrome.storage.local.get(`lastDownload:${msg.boardId}`))[`lastDownload:${msg.boardId}`];
+    if (!id) id = (await chrome.storage.local.get('lastDownloadId')).lastDownloadId;
+    await showInFolder(id);
     return { ok: true };
   },
   async startPicker(msg) {
@@ -337,9 +406,7 @@ const handlers = {
   async recStatus() {
     return { recording: !!(await getRec()) };
   },
-  async syncPin(msg) {
-    return offscreen({ type: 'syncPin', id: msg.id });
-  },
+
   async openBoard() {
     const contexts = await chrome.runtime.getContexts({ contextTypes: ['TAB'] });
     const existing = contexts.find((c) => c.documentUrl?.startsWith(BOARD_URL));
